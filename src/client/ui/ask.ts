@@ -1,3 +1,4 @@
+import { openConnectedOffice, isConnectedOffice } from './connected';
 import type { AgentEffort, AgentProvider, WorkerStatus } from '../../shared/protocol';
 import { h, openModal, STATUS_LABEL } from './dom';
 import { store } from '../state';
@@ -35,6 +36,7 @@ export interface AskOptions {
 const WT_KEY = 'agent-office.worktree';
 
 export function openAsk(opts: AskOptions) {
+  if (isConnectedOffice()) return openConnectedOffice();
   let to: string | null = opts.newDesk ? null : (opts.workers[0]?.id ?? null);
   const ta = h('textarea', { rows: opts.initial ? 9 : 5, placeholder: opts.placeholder ?? 'What should the worker do?', 'aria-label': 'Prompt' }) as HTMLTextAreaElement;
   ta.value = opts.initial ?? '';

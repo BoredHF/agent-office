@@ -1,3 +1,5 @@
+import { setupCatalog, setupScope, validateSetup } from './paperclip/setup.js';
+import type { ConnectedProviderConfig } from './orchestration.js';
 import { isLocalExecutionMessage } from '../shared/orchestration.js';
 import http from 'node:http';
 import https from 'node:https';
@@ -175,7 +177,7 @@ const SIGNED_OUT = 4001;
 const SEARCH_CHAT_HITS = 50;
 const SEARCH_TERMINAL_HITS = 25;
 
-export async function startServer(cfg: Config) {
+export async function startServer(cfg: Config, options: { connectedProvider?: ConnectedProviderConfig } = {}) {
   const publicDir = findPublicDir();
   const accounts = new Accounts(cfg.dataDir);
   const auth = new Auth(cfg.verifier, cfg.salt, cfg.secret, accounts);
@@ -402,6 +404,7 @@ export async function startServer(cfg: Config) {
   };
 
   const floorContext: FloorContext = {
+    connectedProvider: options.connectedProvider,
     agentCmd: cfg.agentCmd,
     agentArgs: cfg.agentArgs,
     hook: { url: `http://127.0.0.1:${hookPort}`, token: '' },
@@ -695,6 +698,31 @@ export async function startServer(cfg: Config) {
         if (p.startsWith('/api/')) return send(res, 401, { error: 'Not logged in' });
         res.writeHead(302, { location: '/login' }).end();
         return;
+      }
+      if (p === '/api/paperclip/catalog' && req.method === 'GET') {
+        try { return send(res, 200, await setupCatalog(options.connectedProvider)); }
+        catch { return send(res, 503, { error: 'Setup catalog unavailable' }); }
+      }
+      if (p === '/api/paperclip/offices' && req.method === 'POST') {
+        if (!sameOrigin(req, cfg)) return send(res, 403, { error: 'Forbidden' });
+        let checked;
+        try {
+          const body = JSON.parse(await readBody(req, 4096));
+          if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(k => !['requestId', 'name', 'connectionId', 'companyId', 'projectId'].includes(k))
+            || typeof body.requestId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(body.requestId)
+            || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 100) return send(res, 400, { error: 'Invalid setup request' });
+          const scope = setupScope(body);
+          checked = await validateSetup(options.connectedProvider, scope, 'setup-create');
+          if (!auth.fromRequest(req)) return send(res, 401, { error: 'Not logged in' });
+          const fingerprint = JSON.stringify({ name: body.name.trim(), ...scope });
+          const def = building.createConnected(body.name, session.account?.name ?? 'Shared password', { mode: 'paperclip', ...scope },
+            JSON.stringify([session.account?.id ?? 'shared-password', body.requestId]), fingerprint);
+          const floor = floors.get(def.id) ?? openFloor(def);
+          if (!floor) return send(res, 503, { error: 'Connected office unavailable' });
+          floorsChanged();
+          return send(res, 200, { officeId: def.id, scope: floor.provider.scope });
+        } catch { return send(res, 409, { error: 'Connected setup unavailable or request conflict' }); }
+        finally { checked?.provider.shutdown(); }
       }
       if (p === '/api/whoami') return send(res, 200, { ok: true, me: meOf(session.account?.id) });
       if (p === '/api/agents/opencode/models' && req.method === 'GET') {
@@ -1070,6 +1098,31 @@ export async function startServer(cfg: Config) {
       return { wid, floor, info };
     };
     switch (msg.t) {
+      case 'orchestration.reconnect': {
+        const floor = here();
+        if (!floor || floor.provider.scope.mode !== 'paperclip') return warn(c, 'Connected office required');
+        const old = floor.provider;
+        old.disconnect();
+        void validateSetup(options.connectedProvider, setupScope(old.scope), floor.id).then(({ provider }) => {
+          if (clients.get(c.id) !== c || floorOf(c) !== floor || floor.provider !== old || !stillIn(c)) { provider.shutdown(); return; }
+          floor.provider = provider;
+          sendTo(c, { t: 'orchestration', snapshot: provider.snapshot() });
+        }).catch(() => { if (clients.get(c.id) === c && floorOf(c) === floor) warn(c, 'Reconnect unavailable; check server configuration and scope'); });
+        break;
+      }
+      case 'orchestration.refresh': {
+        const floor = here();
+        if (!floor) return;
+        if (typeof msg.visible !== 'boolean') { warn(c, 'Invalid refresh visibility'); return; }
+        const provider = floor.provider;
+        void (provider.refresh?.(msg.visible) ?? Promise.resolve(provider.snapshot())).then(() => {
+          // A read may finish after the requester changed offices or disconnected.
+          if (clients.get(c.id) === c && floorOf(c) === floor && floor.provider === provider) {
+            sendTo(c, { t: 'orchestration', snapshot: provider.snapshot() });
+          }
+        }).catch(() => { if (clients.get(c.id) === c && floorOf(c) === floor) warn(c, 'Orchestration refresh failed'); });
+        return;
+      }
       case 'move': {
         const p = c.peer;
         p.x = num(msg.x);

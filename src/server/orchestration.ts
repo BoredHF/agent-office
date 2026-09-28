@@ -1,4 +1,5 @@
 import { NO_PROVIDER_CAPABILITIES, officeBinding, sameProviderScope, type OfficeBinding, type ProviderCommand, type ProviderCommandResult, type ProviderScope, type ProviderSnapshot } from '../shared/orchestration.js';
+import { PaperclipReadProvider, type PaperclipConnection, type ReadOptions } from './paperclip/reads.js';
 import type { WorkerManager } from './workers.js';
 import type { TaskQueue } from './queue.js';
 import type { MeetingRoom } from './meetings.js';
@@ -8,6 +9,7 @@ export interface LocalRuntime { workers: WorkerManager; queue: TaskQueue; meetin
 export interface OrchestrationProvider {
   readonly scope: ProviderScope;
   snapshot(): ProviderSnapshot;
+  refresh?(visible: boolean): Promise<ProviderSnapshot>;
   command(command: ProviderCommand): Promise<ProviderCommandResult>;
   disconnect(): void;
   shutdown(keep?: boolean): void;
@@ -47,8 +49,17 @@ export class DisconnectedOrchestrationProvider implements OrchestrationProvider 
   disconnect() {}
   shutdown() {}
 }
+export interface ConnectedProviderConfig {
+  /** Trusted server registry only; office scope must be authorized by the resolver. */
+  resolveConnection(scope: Extract<ProviderScope, { mode: 'paperclip' }>): PaperclipConnection | undefined;
+  /** Explicit server-authorized setup bindings. Absent means an empty setup catalog. */
+  setupScopes?: () => readonly import('./paperclip/setup.js').SetupScope[];
+  readOptions?: ReadOptions;
+}
 /** Factory is deliberately lazy: validation and mode selection precede every local constructor. */
-export function createOrchestrationProvider(officeId: string, binding: OfficeBinding | undefined, local: () => LocalRuntime): OrchestrationProvider {
+export function createOrchestrationProvider(officeId: string, binding: OfficeBinding | undefined, local: () => LocalRuntime, connected?: ConnectedProviderConfig): OrchestrationProvider {
   const scope: ProviderScope = Object.freeze({ ...officeBinding(binding), officeId });
-  return scope.mode === 'local' ? new LocalOrchestrationProvider(scope, local()) : new DisconnectedOrchestrationProvider(scope);
+  if (scope.mode === 'local') return new LocalOrchestrationProvider(scope, local());
+  const connection = connected?.resolveConnection(scope);
+  return connection ? new PaperclipReadProvider(scope, connection, connected?.readOptions) : new DisconnectedOrchestrationProvider(scope);
 }

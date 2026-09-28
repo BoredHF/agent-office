@@ -1,3 +1,4 @@
+import { openConnectedOffice, isConnectedOffice } from './connected';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -49,6 +50,7 @@ export function openTerminalFor(): string | null {
 }
 
 export function openTerminal(net: Net, workerId: string, onChanges?: () => void, find?: TerminalFind) {
+  if (isConnectedOffice()) return openConnectedOffice(net);
   if (current?.workerId === workerId) {
     if (find) current.find(find);
     return;

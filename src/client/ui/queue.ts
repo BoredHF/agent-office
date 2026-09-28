@@ -1,3 +1,4 @@
+import { openConnectedOffice, isConnectedOffice } from './connected';
 import { compareTaskPriority } from '../../shared/protocol';
 import { openRoles, openTask, taskPickers } from './workflow';
 import type { AgentProvider, QueueTask, Usage } from '../../shared/protocol';
@@ -36,6 +37,7 @@ function outcome(t: QueueTask): string {
 }
 
 export function openQueue(net: Net, actions: QueueActions) {
+  if (isConnectedOffice()) return openConnectedOffice(net);
   const officeId = store.floor;
   const body = h('div.body.queue');
   const close = h('button.btn.close', { 'aria-label': 'Close' }, '✕');

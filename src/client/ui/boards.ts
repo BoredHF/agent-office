@@ -1,3 +1,4 @@
+import { openConnectedOffice, isConnectedOffice } from './connected';
 import { DESK_BY_ID } from '../../shared/layout';
 import type { AgentEffort, AgentProvider, GhIssue, GhPull, WorkerInfo } from '../../shared/protocol';
 import type { Net } from '../net';
@@ -99,6 +100,7 @@ function card(n: number, title: string, meta: (Node | string)[], i: number, oncl
 }
 
 export function openBoard(kind: 'issues' | 'pulls', net: Net, actions: BoardActions) {
+  if (isConnectedOffice()) return openConnectedOffice(net);
   const body = h('div.body');
   const status = h('span.board-status');
   const refresh = h('button.btn', { title: 'Refresh from GitHub', onclick: () => net.send({ t: 'gh.refresh' }) }, '🔄 Refresh');

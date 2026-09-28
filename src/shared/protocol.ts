@@ -938,6 +938,7 @@ export interface SearchResults {
 export type GongWhy = 'hit' | 'merged' | 'queue';
 
 export type ClientMsg = { officeId?: string | null } & (
+  | { t: 'orchestration.refresh' | 'orchestration.reconnect'; visible: boolean }
   | { t: 'move'; x: number; y: number; z: number; rotY: number; moving: boolean }
   /**
    * You reached out to use something; everyone else sees your character's arm do it. With `smoke`,
