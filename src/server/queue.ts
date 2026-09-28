@@ -12,7 +12,8 @@ export interface QueueWorkers {
   readonly defaultProvider: AgentProvider;
   list(): WorkerInfo[];
   deskOccupied(deskId: string): boolean;
-  spawn(deskId: string, by: string, prompt: string, worktree: boolean, kind: 'agent', provider: AgentProvider, model?: string, effort?: AgentEffort): WorkerInfo | string;
+  /** reservedId is durably owned by the queue and must be used for the spawned worker. */
+  spawn(deskId: string, by: string, prompt: string, worktree: boolean, kind: 'agent', provider: AgentProvider, model?: string, effort?: AgentEffort, meeting?: undefined, reservedId?: string): WorkerInfo | string;
   holdRecovery?(id: string): void;
   prompt?(id: string, text: string, by: string): string | undefined;
   /** Resolves with a line about what became of the worker's worktree. */
@@ -139,11 +140,16 @@ export class TaskQueue {
     if (update.status) {
       t.status = update.status;
       if (update.status === 'done') t.reviewedBy = by;
-      if (update.status === 'queued') { t.workerId = undefined; t.outcome = undefined; t.error = undefined; }
+      if (update.status === 'queued') this.clearAttempt(t);
     }
     this.record(t, by, update.note?.trim().slice(0, 5000) || (update.status === 'done' ? 'Result accepted' : 'Task assignment or priority updated'));
     if (!this.changed()) return this.storageError;
     this.pump();
+  }
+
+  /** Keep task identity and history, but never present a previous attempt as the next result. */
+  private clearAttempt(t: QueueTask) {
+    for (const key of ['workerId', 'workerName', 'attemptId', 'roleSnapshot', 'branch', 'pr', 'startedAt', 'finishedAt', 'reviewedBy', 'outcome', 'error'] as const) delete t[key];
   }
 
   get limit(): number {
@@ -368,8 +374,9 @@ export class TaskQueue {
    */
   private recycleDesk(): string | undefined {
     const byId = new Map(this.workers.list().map((w) => [w.id, w]));
+    const reserved = new Set(this.tasks.filter((t) => ['queued', 'running', 'blocked'].includes(t.status)).flatMap((t) => t.assigneeId ? [t.assigneeId] : []));
     const candidates = this.tasks
-      .filter((t) => ['done', 'review', 'blocked'].includes(t.status) && !Object.hasOwn(this.assignments, t.workerId ?? '') && t.workerId && byId.has(t.workerId))
+      .filter((t) => ['done', 'review', 'blocked'].includes(t.status) && !reserved.has(t.workerId ?? '') && !Object.hasOwn(this.assignments, t.workerId ?? '') && t.workerId && byId.has(t.workerId))
       .map((t) => ({ t, w: byId.get(t.workerId!)! }))
       .filter(({ w }) => FINISHED.has(w.status) && w.viewers.length === 0)
       .sort((a, b) => Number(!!b.t.pr) - Number(!!a.t.pr) || (a.t.finishedAt ?? 0) - (b.t.finishedAt ?? 0));
@@ -405,19 +412,21 @@ export class TaskQueue {
       const room = assigned ? Infinity : this.events.room?.() ?? Infinity;
       if (room < 0) break;
       const desk = assigned?.deskId ?? ((room > 0 ? this.freeDesk() : undefined) ?? this.recycleDesk());
-      if (!desk) break;
+      if (!desk) continue;
       const roleId = t.roleId || (assigned && this.assignments[assigned.id]);
       t.roleSnapshot = structuredClone(this.roles.find((role) => role.id === roleId));
       t.attemptId = randomBytes(8).toString('hex');
+      t.workerId = assigned?.id ?? randomBytes(6).toString('hex');
       // Persist intent before touching a PTY. A crash in this window requires explicit recovery.
       t.status = 'blocked';
       t.error = 'Dispatch interrupted; inspect the worker before retrying';
       this.record(t, 'queue', 'Starting attempt');
       if (!this.changed()) return;
+      this.workers.holdRecovery?.(t.workerId);
       const role = t.roleSnapshot;
       const prompt = (role ? 'Role: ' + role.name + '\nResponsibilities: ' + role.responsibilities + '\nInstructions: ' + role.instructions + '\n\n' : '') + t.prompt;
       const promptError = assigned ? (this.workers.prompt ? this.workers.prompt(assigned.id, prompt, t.addedBy) : 'This worker cannot receive tasks') : undefined;
-      const r = assigned ? (promptError ?? assigned) : this.workers.spawn(desk, `${t.addedBy} (queue)`, prompt + (this.useWorktree ? WORKTREE_NOTE : ''), this.useWorktree, 'agent', t.provider ?? this.workers.defaultProvider, t.model, t.effort);
+      const r = assigned ? (promptError ?? assigned) : this.workers.spawn(desk, `${t.addedBy} (queue)`, prompt + (this.useWorktree ? WORKTREE_NOTE : ''), this.useWorktree, 'agent', t.provider ?? this.workers.defaultProvider, t.model, t.effort, undefined, t.workerId);
       changed = true;
       if (typeof r === 'string') {
         t.status = 'blocked';
