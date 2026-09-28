@@ -30,7 +30,7 @@ export function openConnectedSetup(net: Net): void {
   const status = h('p', { role: 'status', 'aria-live': 'polite' }, 'Loading server-approved projects…');
   const submit = h('button.btn.primary', { type: 'submit', disabled: true }, pending ? 'Retry saved request' : 'Create connected office');
   const reload = h('button.btn', { type: 'button' }, 'Reload catalog');
-  const close = h('button.btn.close', { type: 'button' }, 'Close');
+  const close = h('button.btn.close', { type: 'button', 'aria-label': 'Close', title: 'Close (Esc)' }, '✕');
   const form = h('form.modal', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Connect office', style: 'width:min(620px,100%)' },
     h('header', {}, h('h2', {}, 'Connect Paperclip office'), close),
     h('div.body.connected-office', {}, h('p', {}, 'Choose a server-configured connection. Credentials are managed by your server administrator.'),
