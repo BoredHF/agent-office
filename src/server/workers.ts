@@ -250,7 +250,7 @@ export class WorkerManager {
    * Hires a worker at a desk. `meeting` seats one at the meeting room's table instead, for that meeting
    * (see meetings.ts), in the meeting's own worktree, which everyone at the table shares.
    */
-  spawn(deskId: string, by: string, prompt?: string, worktree = false, kind: WorkerKind = 'agent', provider?: AgentProvider, model?: string, effort?: AgentEffort, meeting?: { id: string; worktree?: WorkerInfo['worktree'] }): WorkerInfo | string {
+  spawn(deskId: string, by: string, prompt?: string, worktree = false, kind: WorkerKind = 'agent', provider?: AgentProvider, model?: string, effort?: AgentEffort, meeting?: { id: string; worktree?: WorkerInfo['worktree'] }, reservedId?: string): WorkerInfo | string {
     const selectedProvider = kind === 'agent' ? provider ?? this.defaultProvider : undefined;
     const modelError = validateWorkerModel(kind, selectedProvider, model);
     if (modelError) return modelError;
@@ -274,7 +274,10 @@ export class WorkerManager {
     const used = new Set([...this.workers.values()].map((w) => w.info.name.replace(/ 🐚$/, '')));
     const agent = seat.station && STATION_AGENT[seat.station];
     const name = agent ? agent.name : (NAMES.find((n) => !used.has(n)) ?? `Worker ${this.workers.size + 1}`);
-    const id = randomBytes(6).toString('hex');
+    // The queue durably reserves this identity before any execution side effect.
+    const id = reservedId ?? randomBytes(6).toString('hex');
+    if (this.workers.has(id)) return 'Worker identity is already in use';
+    if (reservedId) this.holdRecovery(id);
     let wt: WorkerInfo['worktree'] = meeting?.worktree;
     if (worktree) {
       const made = this.trees.create(`${name.toLowerCase()}-${id.slice(0, 4)}`);
