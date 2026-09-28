@@ -279,7 +279,26 @@ export interface GhPull {
   closes: number[];
 }
 
-export type TaskStatus = 'queued' | 'running' | 'done';
+export type TaskStatus = 'queued' | 'running' | 'blocked' | 'review' | 'done';
+export type TaskPriority = 'urgent' | 'high' | 'medium' | 'low';
+export const TASK_PRIORITY_ORDER: Record<TaskPriority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+export function compareTaskPriority(a: { priority?: TaskPriority }, b: { priority?: TaskPriority }): number {
+  return TASK_PRIORITY_ORDER[a.priority ?? 'medium'] - TASK_PRIORITY_ORDER[b.priority ?? 'medium'];
+}
+export interface OfficeRole {
+  id: string;
+  name: string;
+  responsibilities: string;
+  instructions: string;
+  version: number;
+}
+export interface TaskOptions { priority?: TaskPriority; roleId?: string; assigneeId?: string }
+export interface TaskUpdate extends TaskOptions {
+  status?: 'queued' | 'blocked' | 'done';
+  note?: string;
+}
+export interface TaskHistory { at: number; by: string; note: string; attemptId?: string; roleSnapshot?: OfficeRole }
+
 
 /** A task on the 📋 queue whiteboard: a GitHub issue or free text, seated to a worker by itself. */
 export interface QueueTask {
@@ -296,6 +315,16 @@ export interface QueueTask {
   addedBy: string;
   addedAt: number;
   status: TaskStatus;
+  priority?: TaskPriority;
+  roleId?: string;
+  assigneeId?: string;
+  roleSnapshot?: OfficeRole;
+  attemptId?: string;
+  version?: number;
+  history?: TaskHistory[];
+  lastUpdate?: string;
+  updatedAt?: number;
+  reviewedBy?: string;
   /** The worker seated for it (it may have gone home since). */
   workerId?: string;
   workerName?: string;
@@ -311,6 +340,9 @@ export interface QueueTask {
 }
 
 export interface QueueState {
+  roles?: OfficeRole[];
+  assignments?: Record<string, string>;
+  error?: string;
   tasks: QueueTask[];
   /** How many workers the queue may keep busy at once; 0 pauses it. */
   maxWorkers: number;
@@ -599,6 +631,7 @@ export interface FloorInfo {
   palette: number;
   /** Being cloned: on the elevator panel, but nobody can go there yet. */
   cloning?: boolean;
+  archivedAt?: number;
   addedBy: string;
   addedAt: number;
   /**
@@ -634,6 +667,7 @@ export interface RepoChoice {
 
 /** Everything that belongs to the floor you're on: sent when you walk in, and when you change floors. */
 export interface FloorView {
+  chat?: ChatLine[];
   /** The floor you're on; null while the building has none. */
   floor: string | null;
   project: ProjectInfo | null;
@@ -900,7 +934,7 @@ export interface SearchResults {
 /** Why the gong rang. */
 export type GongWhy = 'hit' | 'merged' | 'queue';
 
-export type ClientMsg =
+export type ClientMsg = { officeId?: string | null } & (
   | { t: 'move'; x: number; y: number; z: number; rotY: number; moving: boolean }
   /**
    * You reached out to use something; everyone else sees your character's arm do it. With `smoke`,
@@ -949,7 +983,10 @@ export type ClientMsg =
   | { t: 'horn' }
   /** Close an issue, or a pull request without merging it; the answer comes back as gh.closed. */
   | { t: 'gh.close'; kind: 'issue' | 'pull'; number: number; comment?: string; reason?: GhCloseReason; deleteBranch?: boolean }
-  | { t: 'queue.add'; prompt: string; title?: string; issue?: number; provider?: AgentProvider; model?: string; effort?: AgentEffort }
+  | ({ t: 'queue.add'; prompt: string; title?: string; issue?: number; provider?: AgentProvider; model?: string; effort?: AgentEffort } & TaskOptions)
+  | { t: 'task.update'; taskId: string; version: number; update: TaskUpdate }
+  | { t: 'role.save'; role: Omit<OfficeRole, 'version'>; version?: number }
+  | { t: 'role.assign'; workerId: string; roleId: string }
   | { t: 'queue.remove'; taskId: string }
   /** Move a queued task up (-1) or down (+1) the queue. */
   | { t: 'queue.move'; taskId: string; delta: number }
@@ -1035,6 +1072,9 @@ export type ClientMsg =
   | { t: 'floor.repos'; refresh?: boolean }
   /** Clone a repository and make it a new floor; answered with `floor.added` once it's there. */
   | { t: 'floor.add'; repo: string }
+  | { t: 'office.create'; name: string }
+  | { t: 'office.rename'; officeId: string; name: string }
+  | { t: 'office.archive'; officeId: string; archived: boolean }
   /** Dress the building up for a holiday, take the decorations down ('off'), or follow the calendar ('auto'). */
   | { t: 'theme.set'; pick: ThemePick }
   /** Where new floors are cloned from now on (admins only); '' goes back to the default. */
@@ -1043,7 +1083,7 @@ export type ClientMsg =
   | { t: 'dog.pet' }
   /** Name the dog on your floor ('' gives it back its first name). */
   | { t: 'dog.name'; name: string }
-  | { t: 'ping'; at: number };
+  | { t: 'ping'; at: number });
 
 export type ServerMsg =
   | ({

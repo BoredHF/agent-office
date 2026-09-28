@@ -1,3 +1,4 @@
+import { openOffices } from './ui/workflow';
 import './style.css';
 import * as THREE from 'three';
 import { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
@@ -616,7 +617,7 @@ function renderProject() {
   }
   if (!p) {
     $('project-name').textContent = '🏢 Agent Office';
-    $('project-meta').textContent = store.floors.length ? '🛗 Take the elevator to a floor' : '🛗 No floors yet — add a project in the elevator';
+    $('project-meta').textContent = store.floors.length ? '🛗 Take the elevator to a floor' : 'Create an office here, or add a project in the elevator';
     // Where to go next, so it shows even with the floor details turned off.
     $('project-meta').classList.add('lobby');
     office.setProjectName(store.floors.length ? 'Pick a floor' : 'Lobby');
@@ -2587,8 +2588,8 @@ $('hud').addEventListener('click', (e) => {
 });
 // The project in the corner is the floor you're on; click it for the list of floors to go to.
 $('project').addEventListener('click', () => {
-  if (!store.floor) return showElevator();
-  toggleFloorMenu($('project'), { go: switchFloor, elevator: showElevator, roof: () => ride(ROOF) });
+  if (!store.floor) return openOffices(net);
+  toggleFloorMenu($('project'), { go: switchFloor, offices: () => openOffices(net), elevator: showElevator, roof: () => ride(ROOF) });
 });
 
 // ---- The HUD: a few buttons on the top bar, everything else in the ☰ menu ----------------------------
@@ -2596,6 +2597,7 @@ const waitingNow = () => waitingInOrder(store.workers.values());
 const noMedia = () => (window.isSecureContext ? undefined : 'Voice and screen sharing need HTTPS or localhost — use a TLS proxy, --self-signed, or an SSH tunnel');
 const hud = mountHud(
   [
+    { id: 'offices', icon: '🏢', label: 'Offices', section: 'Open', run: () => openOffices(net) },
     { id: 'issues', icon: '📌', label: 'Issues', section: 'Open', count: () => store.issues.items.filter((i) => i.state === 'OPEN').length, run: () => openBoard('issues', net, boardActions()) },
     { id: 'pulls', icon: '🔀', label: 'Pull requests', section: 'Open', count: () => store.pulls.items.filter((p) => p.state === 'OPEN').length, run: () => openBoard('pulls', net, boardActions()) },
     { id: 'queue', icon: '📋', label: 'Task queue', section: 'Open', count: () => store.queue.tasks.filter((t) => t.status !== 'done').length, title: () => 'Issues and tasks waiting for a worker', run: showQueue },

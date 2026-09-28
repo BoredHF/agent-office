@@ -144,6 +144,8 @@ export class WorkerManager {
   private screenTimer: NodeJS.Timeout;
   /** The office is shutting down: workers exiting now are being stopped, not failing to resume. */
   private closing = false;
+  /** Queue-owned attempts require explicit recovery when their PTY cannot be adopted. */
+  private recoveryHeld = new Set<string>();
   private namer: TaskNamer;
   private usageTimer: NodeJS.Timeout;
   /** Runs the workers' terminals outside the office, so they outlive a restart of it (see ptys.ts). */
@@ -200,7 +202,8 @@ export class WorkerManager {
    * back up where it is, mid-turn or not. Whoever else was at a desk when the office stopped (a
    * restart, a crash) gets straight back to work. Call once, before anyone can walk in.
    */
-  async start() {
+  async start(managedWorkers: Iterable<string> = []) {
+    for (const id of managedWorkers) this.holdRecovery(id);
     await this.host.connect();
     await Promise.all(
       [...this.workers.values()].map(async (w) => {
@@ -355,8 +358,10 @@ export class WorkerManager {
   }
 
   /** Starts every worker that isn't running: nobody should be found asleep at their desk. */
+  holdRecovery(id: string) { this.recoveryHeld.add(id); }
+
   wakeAll() {
-    for (const w of this.workers.values()) if (!w.pty) this.resume(w.info.id);
+    for (const w of this.workers.values()) if (!w.pty && !this.recoveryHeld.has(w.info.id)) this.resume(w.info.id);
   }
 
   /**
@@ -1029,7 +1034,7 @@ export class WorkerManager {
         return;
       }
       // The terminal host died and took the process with it: nothing the worker did.
-      if (lost && !this.closing) {
+      if (lost && !this.closing && !this.recoveryHeld.has(info.id)) {
         this.resume(info.id);
         return;
       }

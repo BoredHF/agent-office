@@ -1,0 +1,8 @@
+{
+  "maxWorkers": 0,
+  "tasks": [
+    {"id":"legacy-queued","title":"Same task","prompt":"Synthetic QA work","status":"queued","addedBy":"QA","addedAt":1000},
+    {"id":"legacy-running","title":"Active work","prompt":"Synthetic QA work","status":"running","workerId":"survivor","workerName":"Engineer","startedAt":1500,"addedAt":1000,"addedBy":"QA"},
+    {"id":"legacy-done","title":"Historical work","prompt":"Synthetic QA work","status":"done","outcome":"done","workerId":"old-worker","workerName":"Engineer","startedAt":1100,"finishedAt":1200,"addedAt":1000,"addedBy":"QA","branch":"qa/history","pr":{"number":1,"url":"https://example.invalid/pr/1","title":"Synthetic history","state":"CLOSED"}}
+  ]
+}

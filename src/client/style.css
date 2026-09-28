@@ -990,3 +990,10 @@ a.when:hover { text-decoration: underline; }
 .meeting-past summary { font-weight: 800; cursor: pointer; }
 .meeting-past ul { padding-left: 18px; margin: 6px 0 0; }
 .meeting-past li { margin: 6px 0; }
+
+.workflow-fields { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.workflow-fields label { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 130px; }
+.workflow-fields select, .workflow-fields input { max-width: 100%; padding: 6px; }
+.workflow-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.queue-list li.review { border-left: 4px solid #b88713; }
+.queue-list li.blocked { border-left: 4px solid #bb4850; }

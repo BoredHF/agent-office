@@ -41,7 +41,7 @@ export function openElevator(opts: ElevatorOptions): void {
   let selected: string | null = null;
   let adding: string | null = null;
   let error = '';
-  let showAdd = setup || !store.floors.length;
+  let showAdd = setup || !store.floors.filter((f) => !f.archivedAt).length;
   /** The search box and list are in place (rebuilding them would lose the focus mid-typing). */
   let built = false;
 
