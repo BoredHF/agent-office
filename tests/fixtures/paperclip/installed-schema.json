@@ -1,0 +1,3828 @@
+{
+  "info": {
+    "title": "Paperclip API",
+    "version": "1.0.0",
+    "description": "REST API for the Paperclip AI agent management platform"
+  },
+  "securitySchemes": {
+    "BoardSessionAuth": {
+      "type": "apiKey",
+      "in": "cookie",
+      "name": "paperclip_session",
+      "description": "Board session cookie in authenticated mode. Paperclip uses Better Auth; cookie transport may vary by deployment."
+    },
+    "BoardApiKeyAuth": {
+      "type": "http",
+      "scheme": "bearer",
+      "bearerFormat": "Board API Key",
+      "description": "Board API key presented in the Authorization bearer header."
+    },
+    "AgentBearerAuth": {
+      "type": "http",
+      "scheme": "bearer",
+      "bearerFormat": "Agent API Key or Agent JWT",
+      "description": "Agent API key or Paperclip-issued local agent JWT presented in the Authorization bearer header."
+    },
+    "RuntimeToolsBearerAuth": {
+      "type": "http",
+      "scheme": "bearer",
+      "bearerFormat": "Heartbeat-bound runtime tools token",
+      "description": "Scoped token bound to an active heartbeat run and presented in the Authorization bearer header. The GitHub credential endpoint requires the distinct github_credentials scope."
+    },
+    "AgentRunAuth": {
+      "type": "http",
+      "scheme": "bearer",
+      "bearerFormat": "Task-bound agent JWT",
+      "description": "Paperclip-issued JWT bound to an active task run. Agent API keys, board sessions, and connection-only tokens are rejected."
+    }
+  },
+  "paths": {
+    "/api/companies/{companyId}/projects": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "List projects in a company",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Create a project",
+        "description": "The optional repositoryIds field selects GitHub source repositories and requires a board caller. It cannot be combined with workspace. All selections are validated before the project and repository workspaces are created atomically.",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "goalId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "goalIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "backlog",
+                      "planned",
+                      "in_progress",
+                      "completed",
+                      "cancelled"
+                    ]
+                  },
+                  "leadAgentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "targetDate": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "color": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "icon": {
+                    "type": "string",
+                    "enum": [
+                      "folder",
+                      "rocket",
+                      "code",
+                      "terminal",
+                      "database",
+                      "globe",
+                      "package",
+                      "boxes",
+                      "box",
+                      "layers",
+                      "briefcase",
+                      "compass",
+                      "target",
+                      "flame",
+                      "zap",
+                      "star",
+                      "bug",
+                      "wrench",
+                      "hammer",
+                      "lightbulb",
+                      "sparkles",
+                      "shield",
+                      "lock",
+                      "search",
+                      "cog",
+                      "brain",
+                      "cpu",
+                      "git-branch",
+                      "file-code",
+                      "puzzle",
+                      "gem",
+                      "atom",
+                      "heart",
+                      "mail",
+                      "message-square",
+                      "crown",
+                      "radar",
+                      "telescope",
+                      "hexagon"
+                    ],
+                    "nullable": true
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "plain"
+                              ]
+                            },
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "value"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "secret_ref"
+                              ]
+                            },
+                            "secretId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "version": {
+                              "oneOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "latest"
+                                  ]
+                                },
+                                {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                }
+                              ]
+                            },
+                            "projectionClass": {
+                              "type": "string",
+                              "enum": [
+                                "unclassified",
+                                "class_3_static_lease"
+                              ]
+                            },
+                            "projectionAllowlistKey": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 160,
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "secretId"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "user_secret_ref"
+                              ]
+                            },
+                            "key": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 120,
+                              "pattern": "^[a-zA-Z0-9_.-]+$"
+                            },
+                            "version": {
+                              "oneOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "latest"
+                                  ]
+                                },
+                                {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                }
+                              ]
+                            },
+                            "required": {
+                              "type": "boolean"
+                            },
+                            "allowMissingOverride": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "key"
+                          ]
+                        }
+                      ]
+                    },
+                    "nullable": true
+                  },
+                  "executionWorkspacePolicy": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "sharedWorkspaceConcurrency": {
+                        "type": "string",
+                        "enum": [
+                          "auto",
+                          "serialize",
+                          "allow"
+                        ]
+                      },
+                      "defaultMode": {
+                        "type": "string",
+                        "enum": [
+                          "shared_workspace",
+                          "isolated_workspace",
+                          "operator_branch",
+                          "adapter_default"
+                        ]
+                      },
+                      "allowIssueOverride": {
+                        "type": "boolean"
+                      },
+                      "defaultProjectWorkspaceId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                      },
+                      "environmentId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                      },
+                      "workspaceStrategy": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "project_primary",
+                              "git_worktree",
+                              "adapter_managed",
+                              "cloud_sandbox"
+                            ]
+                          },
+                          "baseRef": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "branchTemplate": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "worktreeParentDir": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "provisionCommand": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "runtimeProvisionCommand": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "teardownCommand": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "additionalProperties": false,
+                        "nullable": true
+                      },
+                      "workspaceRuntime": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true
+                      },
+                      "branchPolicy": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true
+                      },
+                      "pullRequestPolicy": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true
+                      },
+                      "runtimePolicy": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true
+                      },
+                      "cleanupPolicy": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true
+                      },
+                      "authorizationPolicy": {
+                        "type": "object",
+                        "properties": {
+                          "trustPreset": {
+                            "type": "string",
+                            "enum": [
+                              "standard",
+                              "low_trust_review"
+                            ]
+                          },
+                          "reviewPreset": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "enum": [
+                                  "low_trust_review"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "rawOutputDisposition": {
+                                "type": "string",
+                                "enum": [
+                                  "quarantine"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "version",
+                              "rawOutputDisposition"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "trustBoundary": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "low_trust_review"
+                                ]
+                              },
+                              "companyId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "projectIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "rootIssueId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "issueIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "allowedAgentIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "allowedSecretBindingIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "allowedToolClasses": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "outputPromotionTarget": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "issue"
+                                    ]
+                                  },
+                                  "issueId": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "issueId"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "mode"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "assignmentPolicy": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "company_default",
+                                  "protected"
+                                ]
+                              },
+                              "protectedAgentRequiresApproval": {
+                                "type": "boolean"
+                              }
+                            }
+                          },
+                          "protectedAgent": {
+                            "type": "object",
+                            "properties": {
+                              "blockAssignment": {
+                                "type": "boolean"
+                              },
+                              "blockReason": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "requiresApproval": {
+                                "type": "boolean"
+                              },
+                              "approvalReason": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "enabled"
+                    ],
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "archivedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  },
+                  "workspace": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "sourceType": {
+                        "type": "string",
+                        "enum": [
+                          "local_path",
+                          "git_repo",
+                          "remote_managed",
+                          "non_git_path"
+                        ]
+                      },
+                      "cwd": {
+                        "type": "string",
+                        "minLength": 1,
+                        "nullable": true
+                      },
+                      "repoUrl": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                      },
+                      "repoRef": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "defaultRef": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "visibility": {
+                        "type": "string",
+                        "enum": [
+                          "default",
+                          "advanced"
+                        ]
+                      },
+                      "setupCommand": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "cleanupCommand": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "remoteProvider": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "remoteWorkspaceRef": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "sharedWorkspaceKey": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "metadata": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true
+                      },
+                      "runtimeConfig": {
+                        "type": "object",
+                        "properties": {
+                          "workspaceRuntime": {
+                            "type": "object",
+                            "additionalProperties": {},
+                            "nullable": true
+                          },
+                          "desiredState": {
+                            "type": "string",
+                            "enum": [
+                              "running",
+                              "stopped",
+                              "manual"
+                            ],
+                            "nullable": true
+                          },
+                          "serviceStates": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string",
+                              "enum": [
+                                "running",
+                                "stopped",
+                                "manual"
+                              ]
+                            },
+                            "nullable": true
+                          }
+                        },
+                        "additionalProperties": false,
+                        "nullable": true
+                      },
+                      "isPrimary": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "repositoryIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^\\d+$"
+                    }
+                  },
+                  "repositoryUrls": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uri",
+                      "maxLength": 2000
+                    }
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      }
+    },
+    "/api/companies/{companyId}/agents": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "List agents in a company",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      },
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "Create an agent",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "ceo",
+                      "cto",
+                      "cmo",
+                      "cfo",
+                      "security",
+                      "engineer",
+                      "designer",
+                      "pm",
+                      "qa",
+                      "devops",
+                      "researcher",
+                      "general"
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "icon": {
+                    "type": "string",
+                    "enum": [
+                      "bot",
+                      "cpu",
+                      "brain",
+                      "zap",
+                      "rocket",
+                      "code",
+                      "terminal",
+                      "shield",
+                      "eye",
+                      "search",
+                      "wrench",
+                      "hammer",
+                      "lightbulb",
+                      "sparkles",
+                      "star",
+                      "heart",
+                      "flame",
+                      "bug",
+                      "cog",
+                      "database",
+                      "globe",
+                      "lock",
+                      "mail",
+                      "message-square",
+                      "file-code",
+                      "git-branch",
+                      "package",
+                      "puzzle",
+                      "target",
+                      "wand",
+                      "atom",
+                      "circuit-board",
+                      "radar",
+                      "swords",
+                      "telescope",
+                      "microscope",
+                      "crown",
+                      "gem",
+                      "hexagon",
+                      "pentagon",
+                      "fingerprint"
+                    ],
+                    "nullable": true
+                  },
+                  "reportsTo": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "capabilities": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "desiredSkills": {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "versionId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "versionId"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "adapterType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "adapterConfig": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  },
+                  "instructionsBundle": {
+                    "type": "object",
+                    "properties": {
+                      "entryFile": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "files": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "files"
+                    ]
+                  },
+                  "runtimeConfig": {
+                    "type": "object",
+                    "properties": {
+                      "aiConnection": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string",
+                                "enum": [
+                                  "anthropic",
+                                  "openai",
+                                  "openrouter",
+                                  "xai"
+                                ]
+                              },
+                              "method": {
+                                "type": "string",
+                                "enum": [
+                                  "subscription",
+                                  "api_key"
+                                ]
+                              },
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "responsible_user"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "method",
+                              "mode"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string",
+                                "enum": [
+                                  "anthropic",
+                                  "openai",
+                                  "openrouter",
+                                  "xai"
+                                ]
+                              },
+                              "method": {
+                                "type": "string",
+                                "enum": [
+                                  "subscription",
+                                  "api_key"
+                                ]
+                              },
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "shared"
+                                ]
+                              },
+                              "connectionId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "grantId": {
+                                "type": "string",
+                                "format": "uuid"
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "method",
+                              "mode",
+                              "connectionId",
+                              "grantId"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "provider": {
+                                "type": "string",
+                                "enum": [
+                                  "anthropic",
+                                  "openai",
+                                  "openrouter",
+                                  "xai"
+                                ]
+                              },
+                              "method": {
+                                "type": "string",
+                                "enum": [
+                                  "subscription",
+                                  "api_key"
+                                ]
+                              },
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "delegated"
+                                ]
+                              },
+                              "connectionId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "grantId": {
+                                "type": "string",
+                                "format": "uuid"
+                              }
+                            },
+                            "required": [
+                              "provider",
+                              "method",
+                              "mode",
+                              "connectionId",
+                              "grantId"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "debug": {
+                        "type": "object",
+                        "properties": {
+                          "providerTrace": {
+                            "type": "string",
+                            "enum": [
+                              "raw"
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "defaultEnvironmentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "budgetMonthlyCents": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "permissions": {
+                    "type": "object",
+                    "properties": {
+                      "canCreateAgents": {
+                        "type": "boolean"
+                      },
+                      "canCreateSkills": {
+                        "type": "boolean"
+                      },
+                      "trustPreset": {
+                        "type": "string",
+                        "enum": [
+                          "standard",
+                          "low_trust_review"
+                        ]
+                      },
+                      "authorizationPolicy": {
+                        "type": "object",
+                        "properties": {
+                          "trustPreset": {
+                            "type": "string",
+                            "enum": [
+                              "standard",
+                              "low_trust_review"
+                            ]
+                          },
+                          "reviewPreset": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "enum": [
+                                  "low_trust_review"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "rawOutputDisposition": {
+                                "type": "string",
+                                "enum": [
+                                  "quarantine"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "version",
+                              "rawOutputDisposition"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "trustBoundary": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "low_trust_review"
+                                ]
+                              },
+                              "companyId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "projectIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "rootIssueId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "issueIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "allowedAgentIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "allowedSecretBindingIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "allowedToolClasses": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "outputPromotionTarget": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "issue"
+                                    ]
+                                  },
+                                  "issueId": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "issueId"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "mode"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "assignmentPolicy": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "company_default",
+                                  "protected"
+                                ]
+                              },
+                              "protectedAgentRequiresApproval": {
+                                "type": "boolean"
+                              }
+                            }
+                          },
+                          "protectedAgent": {
+                            "type": "object",
+                            "properties": {
+                              "blockAssignment": {
+                                "type": "boolean"
+                              },
+                              "blockReason": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "requiresApproval": {
+                                "type": "boolean"
+                              },
+                              "approvalReason": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "nullable": true
+                  },
+                  "storedSessionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "applyStoredClaudeLogin": {
+                    "type": "boolean"
+                  },
+                  "onboardingFirstAgent": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      }
+    },
+    "/api/companies/{companyId}/issues": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "List issues in a company",
+        "description": "Use `view=compact` for the board issue-list row contract. The default response remains the broad compatibility contract.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Not Modified"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "compact"
+              ]
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      },
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Create an issue",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      }
+    },
+    "/api/companies/{companyId}/activity": {
+      "get": {
+        "tags": [
+          "activity"
+        ],
+        "summary": "List company activity",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      },
+      "post": {
+        "tags": [
+          "activity"
+        ],
+        "summary": "Create an activity entry",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "actorType": {
+                    "type": "string",
+                    "enum": [
+                      "agent",
+                      "user",
+                      "system",
+                      "plugin"
+                    ]
+                  },
+                  "actorId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "action": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entityType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entityId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "agentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "details": {
+                    "type": "object",
+                    "additionalProperties": {},
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "actorId",
+                  "action",
+                  "entityType",
+                  "entityId"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      }
+    },
+    "/api/companies/{companyId}/agent-configurations": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "List agent configurations for a company",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "companyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      }
+    },
+    "/api/issues/{id}": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Get an issue",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      },
+      "patch": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Update an issue",
+        "description": "When posting a comment, attachmentIds selects up to 20 unique uploaded attachments from this exact task and company. The comment, attachment binding, and issue update commit atomically. attachmentIds without a comment is rejected; Markdown links alone do not bind uploads.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "projectId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "projectWorkspaceId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "goalId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "blockedByIssueIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "unblockDescriptor": {
+                    "type": "object",
+                    "properties": {
+                      "owner": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "agentId": {
+                                "type": "string",
+                                "format": "uuid"
+                              }
+                            },
+                            "required": [
+                              "agentId"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": [
+                              "userId"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "board"
+                            ]
+                          }
+                        ]
+                      },
+                      "action": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "owner",
+                      "action"
+                    ],
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "inheritExecutionWorkspaceFromIssueId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "backlog",
+                      "todo",
+                      "in_progress",
+                      "in_review",
+                      "done",
+                      "blocked",
+                      "cancelled"
+                    ]
+                  },
+                  "workMode": {
+                    "type": "string",
+                    "enum": [
+                      "standard",
+                      "ask",
+                      "planning",
+                      "skill_test"
+                    ]
+                  },
+                  "harnessKind": {
+                    "type": "string",
+                    "enum": [
+                      "skill_test"
+                    ],
+                    "nullable": true
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "critical",
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "reviewPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "anyone",
+                      "not_creator",
+                      "human_only"
+                    ],
+                    "nullable": true
+                  },
+                  "assigneeAgentId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "nullable": true
+                  },
+                  "assigneeUserId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "requestDepth": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "billingCode": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "assigneeAdapterOverrides": {
+                    "type": "object",
+                    "properties": {
+                      "adapterConfig": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      },
+                      "useProjectWorkspace": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "executionPolicy": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "normal",
+                          "auto"
+                        ]
+                      },
+                      "commentRequired": {
+                        "type": "boolean"
+                      },
+                      "stages": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "review",
+                                "approval"
+                              ]
+                            },
+                            "approvalsNeeded": {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            "participants": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "agent",
+                                      "user"
+                                    ]
+                                  },
+                                  "agentId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "nullable": true
+                                  },
+                                  "userId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  }
+                                },
+                                "required": [
+                                  "type"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        }
+                      },
+                      "monitor": {
+                        "type": "object",
+                        "properties": {
+                          "nextCheckAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "notes": {
+                            "type": "string",
+                            "maxLength": 500,
+                            "nullable": true
+                          },
+                          "scheduledBy": {
+                            "type": "string",
+                            "enum": [
+                              "assignee",
+                              "board"
+                            ]
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "external_service"
+                            ],
+                            "nullable": true
+                          },
+                          "serviceName": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120,
+                            "nullable": true
+                          },
+                          "externalRef": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500,
+                            "nullable": true
+                          },
+                          "timeoutAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "maxAttempts": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "exclusiveMinimum": true,
+                            "maximum": 100,
+                            "nullable": true
+                          },
+                          "recoveryPolicy": {
+                            "type": "string",
+                            "enum": [
+                              "wake_owner",
+                              "create_recovery_issue",
+                              "escalate_to_board"
+                            ],
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "nextCheckAt"
+                        ],
+                        "nullable": true
+                      },
+                      "reviewPreset": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "low_trust_review"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "rawOutputDisposition": {
+                            "type": "string",
+                            "enum": [
+                              "quarantine"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "version",
+                          "rawOutputDisposition"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "authorizationPolicy": {
+                        "type": "object",
+                        "properties": {
+                          "trustPreset": {
+                            "type": "string",
+                            "enum": [
+                              "standard",
+                              "low_trust_review"
+                            ]
+                          },
+                          "reviewPreset": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "enum": [
+                                  "low_trust_review"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "rawOutputDisposition": {
+                                "type": "string",
+                                "enum": [
+                                  "quarantine"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "version",
+                              "rawOutputDisposition"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "trustBoundary": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "low_trust_review"
+                                ]
+                              },
+                              "companyId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "projectIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "rootIssueId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "issueIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "allowedAgentIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "allowedSecretBindingIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid"
+                                }
+                              },
+                              "allowedToolClasses": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "outputPromotionTarget": {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "issue"
+                                    ]
+                                  },
+                                  "issueId": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "issueId"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "mode"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "assignmentPolicy": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "company_default",
+                                  "protected"
+                                ]
+                              },
+                              "protectedAgentRequiresApproval": {
+                                "type": "boolean"
+                              }
+                            }
+                          },
+                          "protectedAgent": {
+                            "type": "object",
+                            "properties": {
+                              "blockAssignment": {
+                                "type": "boolean"
+                              },
+                              "blockReason": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "requiresApproval": {
+                                "type": "boolean"
+                              },
+                              "approvalReason": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "maxReviewRounds": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "maximum": 50,
+                        "nullable": true
+                      }
+                    },
+                    "nullable": true
+                  },
+                  "executionWorkspaceId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "executionWorkspacePreference": {
+                    "type": "string",
+                    "enum": [
+                      "inherit",
+                      "shared_workspace",
+                      "isolated_workspace",
+                      "operator_branch",
+                      "reuse_existing",
+                      "agent_default"
+                    ],
+                    "nullable": true
+                  },
+                  "executionWorkspaceSettings": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "inherit",
+                          "shared_workspace",
+                          "isolated_workspace",
+                          "operator_branch",
+                          "reuse_existing",
+                          "agent_default"
+                        ]
+                      },
+                      "sharedWorkspaceConcurrency": {
+                        "type": "string",
+                        "enum": [
+                          "auto",
+                          "serialize",
+                          "allow"
+                        ]
+                      },
+                      "environmentId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                      },
+                      "workspaceStrategy": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "project_primary",
+                              "git_worktree",
+                              "adapter_managed",
+                              "cloud_sandbox"
+                            ]
+                          },
+                          "baseRef": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "branchTemplate": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "existingBranch": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "worktreeParentDir": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "provisionCommand": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "runtimeProvisionCommand": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "teardownCommand": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "additionalProperties": false,
+                        "nullable": true
+                      },
+                      "workspaceRuntime": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true
+                      },
+                      "networkEgress": {
+                        "type": "object",
+                        "properties": {
+                          "allowFqdns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+                              "maxLength": 253
+                            }
+                          },
+                          "allowCidrs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "pattern": "^(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\/(?:3[0-2]|[12]?\\d)$",
+                              "maxLength": 64
+                            }
+                          }
+                        },
+                        "additionalProperties": false,
+                        "nullable": true
+                      }
+                    },
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "labelIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "watchdogDiscovery": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "product_bug",
+                          "platform_bug"
+                        ]
+                      },
+                      "evidenceMarkdown": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
+                  "commentClientRequestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "attachmentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "onBehalfOfUserId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "nullable": true
+                  },
+                  "reviewInteractionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "reviewRequest": {
+                    "type": "object",
+                    "properties": {
+                      "instructions": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 20000
+                      }
+                    },
+                    "required": [
+                      "instructions"
+                    ],
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "reopen": {
+                    "type": "boolean"
+                  },
+                  "resume": {
+                    "type": "boolean"
+                  },
+                  "interrupt": {
+                    "type": "boolean"
+                  },
+                  "deferWakeForGoal": {
+                    "type": "boolean"
+                  },
+                  "hiddenAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      },
+      "delete": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Delete an issue",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      }
+    },
+    "/api/issues/{id}/comments": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "List issue comments",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      },
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Add a comment to an issue",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "clientRequestId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "attachmentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "onBehalfOfUserId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "nullable": true
+                  },
+                  "authorType": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "agent",
+                      "system"
+                    ]
+                  },
+                  "presentation": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "message",
+                          "system_notice"
+                        ]
+                      },
+                      "tone": {
+                        "type": "string",
+                        "enum": [
+                          "neutral",
+                          "info",
+                          "success",
+                          "warning",
+                          "danger"
+                        ]
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160,
+                        "nullable": true
+                      },
+                      "detailsDefaultOpen": {
+                        "type": "boolean"
+                      },
+                      "density": {
+                        "type": "string",
+                        "enum": [
+                          "compact"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "type": "number",
+                        "enum": [
+                          1
+                        ]
+                      },
+                      "sourceChannel": {
+                        "type": "string",
+                        "enum": [
+                          "imessage-photon"
+                        ]
+                      },
+                      "sourceRunId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                      },
+                      "authorizationReason": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 160,
+                        "nullable": true
+                      },
+                      "sections": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 160,
+                              "nullable": true
+                            },
+                            "rows": {
+                              "type": "array",
+                              "items": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "text"
+                                        ]
+                                      },
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120,
+                                        "nullable": true
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 2000
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "text"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "code"
+                                        ]
+                                      },
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120,
+                                        "nullable": true
+                                      },
+                                      "code": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 4000
+                                      },
+                                      "language": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 40,
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "code"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "key_value"
+                                        ]
+                                      },
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120
+                                      },
+                                      "value": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 2000
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "label",
+                                      "value"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "issue_link"
+                                        ]
+                                      },
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120,
+                                        "nullable": true
+                                      },
+                                      "issueId": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                      },
+                                      "identifier": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 80,
+                                        "nullable": true
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 240,
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "type"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "agent_link"
+                                        ]
+                                      },
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120,
+                                        "nullable": true
+                                      },
+                                      "agentId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 160,
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "agentId"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "run_link"
+                                        ]
+                                      },
+                                      "label": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 120,
+                                        "nullable": true
+                                      },
+                                      "runId": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                      },
+                                      "agentId": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 160,
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "runId"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "rows"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "sections"
+                    ],
+                    "additionalProperties": false,
+                    "nullable": true
+                  },
+                  "reopen": {
+                    "type": "boolean"
+                  },
+                  "resume": {
+                    "type": "boolean"
+                  },
+                  "interrupt": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      }
+    },
+    "/api/agents/{id}/keys": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "List agent API keys",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      },
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "Create an agent API key",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "scope": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "standard"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "task_bridge"
+                            ]
+                          },
+                          "projectId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                          },
+                          "projectIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            }
+                          },
+                          "parentIssueId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                          },
+                          "parentIssueIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            }
+                          },
+                          "allowedAssigneeAgentIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            }
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "skill_test"
+                            ]
+                          },
+                          "issueId": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "issueId"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      }
+    },
+    "/api/agents/{id}/keys/{keyId}": {
+      "delete": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "Delete an agent API key",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          },
+          {
+            "AgentBearerAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board_or_agent"
+        }
+      }
+    },
+    "/api/board-api-keys": {
+      "get": {
+        "tags": [
+          "access"
+        ],
+        "summary": "List board API keys",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board"
+        }
+      },
+      "post": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Create a named board API key",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true
+                  },
+                  "requestedCompanyId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board"
+        }
+      }
+    },
+    "/api/board-api-keys/{keyId}": {
+      "delete": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Revoke a board API key",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "keyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "BoardSessionAuth": []
+          },
+          {
+            "BoardApiKeyAuth": []
+          }
+        ],
+        "x-paperclip-authorization": {
+          "actor": "board"
+        }
+      }
+    }
+  }
+}
