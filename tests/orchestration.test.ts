@@ -32,3 +32,18 @@ test('scope equality checks every isolation dimension and legacy controls remain
   for (const t of ['control', 'worker.spawn', 'worker.resume', 'queue.retry', 'task.update', 'meeting.start', 'station.prompt', 'term.input', 'role.assign']) assert.equal(isLocalExecutionMessage(t), true);
   for (const t of ['chat', 'move', 'wb.update', 'floor.go']) assert.equal(isLocalExecutionMessage(t), false);
 });
+test('trusted connection factory validates scope before any local construction', () => {
+  const local = () => { throw new Error('WRONG local construction'); };
+  const connection = { connectionId: 'connection', companyId: 'company', origin: 'https://paperclip.example', approvedOrigins: ['https://paperclip.example'], companyPrefix: 'AGE', credential: async () => 'server-secret' };
+  const absent = createOrchestrationProvider('office', binding, local, { resolveConnection: () => undefined });
+  assert.equal(absent.snapshot().state, 'disconnected');
+  for (const key of ['connectionId', 'companyId']) {
+    assert.throws(() => createOrchestrationProvider('office', binding, local, { resolveConnection: () => ({ ...connection, [key]: 'foreign' }) }), /scope/);
+  }
+  const configured = createOrchestrationProvider('office', binding, local, { resolveConnection: scope => {
+    assert.equal(scope.projectId, 'project'); assert.ok(Object.isFrozen(scope)); return connection;
+  } });
+  assert.equal(typeof configured.refresh, 'function');
+  assert.ok(!JSON.stringify(configured.snapshot()).includes('secret'));
+  configured.shutdown();
+});

@@ -20,13 +20,14 @@ import { MeetingRoom } from './meetings.js';
 import { Worktrees } from './worktrees.js';
 import type { Ledger } from './usage.js';
 import type { Capacity } from './machine.js';
-import { createOrchestrationProvider, LocalOrchestrationProvider, type OrchestrationProvider } from './orchestration.js';
+import { createOrchestrationProvider, LocalOrchestrationProvider, type OrchestrationProvider, type ConnectedProviderConfig } from './orchestration.js';
 import { officeBinding } from '../shared/orchestration.js';
 
 type ToastLevel = 'info' | 'warn' | 'error';
 
 /** What a floor needs from the building around it. */
 export interface FloorContext {
+  connectedProvider?: ConnectedProviderConfig;
   agentCmd: string;
   agentArgs: string[];
   hook: HookEnv;
@@ -81,7 +82,7 @@ export class Floor {
   readonly id: string;
   readonly dir: string;
   readonly project: ProjectInfo;
-  readonly provider: OrchestrationProvider;
+  provider: OrchestrationProvider;
   get local() { return this.provider instanceof LocalOrchestrationProvider ? this.provider.runtime : undefined; }
   private requireLocal() {
     if (!this.local) throw new Error('Local execution is unavailable in a connected office');
@@ -206,7 +207,7 @@ export class Floor {
       );
 
       return { workers, queue, meetings };
-    });
+    }, ctx.connectedProvider);
 
     // What each worker changed, for the Changes window at its desk (see changes.ts).
     this.changes = new Changes(

@@ -23,8 +23,24 @@ test('connected server startup/restart, arrival, legacy commands and disconnect 
   // Deliberately malformed local state: any accidental constructor would read/repair/recover it.
   const saved = { 'workers.json': '[{"id":"old-worker","status":"working"}]', 'queue.json': '{"version":1,"tasks":[{"id":"queued","status":"queued"}]}', 'meetings.json': '{"current":{"status":"running"}}', 'pty-host.json': '{"pid":-1}' };
   for (const [name, content] of Object.entries(saved)) writeFileSync(path.join(data, name), content);
-  for (let restart = 0; restart < 2; restart++) {
-    const app = await startServer(cfg);
+  for (let restart = 0; restart < 3; restart++) {
+    let now = Date.parse('2026-09-28T00:00:00Z'), calls = 0, revoked = false;
+    let gate: Promise<void> | undefined, started: (() => void) | undefined;
+    const app = await startServer(cfg, restart === 0 ? {} : { connectedProvider: {
+      resolveConnection: scope => {
+        assert.equal(scope.officeId, 'connected');
+        return { connectionId: 'conn', companyId: 'company', origin: 'https://paperclip.example', approvedOrigins: ['https://paperclip.example'], companyPrefix: 'AGE', credential: async () => 'server-secret' };
+      },
+      readOptions: { now: () => now, random: () => 0, transport: (async (input, init) => {
+        calls++;
+        started?.(); await gate;
+        assert.equal((init?.headers as Record<string, string>).Authorization, 'Bearer server-secret');
+        if (revoked) return new Response('', { status: 401 });
+        const url = new URL(String(input));
+        return Response.json(url.pathname.endsWith('/projects') ? [{ id: 'project', companyId: 'company', name: 'Project', status: 'in_progress' }]
+          : url.pathname.endsWith('/issues') ? [{ id: 'remote-task', companyId: 'company', projectId: 'project', title: 'Remote task', status: 'todo', priority: 'medium', statusVersion: 1, updatedAt: '2026-09-28T00:00:00Z', secret: 'upstream-secret' }] : []);
+      }) as typeof fetch },
+    } });
     try {
       const floor = app.floors()[0]; assert.ok(floor); assert.equal(floor.local, undefined);
       assert.throws(() => floor.workers, /Local execution is unavailable/);
@@ -48,6 +64,44 @@ test('connected server startup/restart, arrival, legacy commands and disconnect 
       try {
         const welcome = await next('welcome'); assert.equal(welcome.t, 'welcome');
         if (welcome.t === 'welcome') { assert.equal(welcome.orchestration?.state, 'disconnected'); assert.deepEqual(welcome.workers, []); assert.deepEqual(welcome.queue.tasks, []); }
+        ws.send(JSON.stringify({ t: 'orchestration.refresh', officeId: 'foreign', visible: true }));
+        const crossOffice = await next('toast');
+        assert.ok(crossOffice.t === 'toast' && /Office context changed/.test(crossOffice.text));
+        assert.equal(calls, 0);
+        const refresh = async () => {
+          ws.send(JSON.stringify({ t: 'orchestration.refresh', officeId: 'connected', visible: true }));
+          const result = await next('orchestration'); assert.equal(result.t, 'orchestration');
+          if (result.t !== 'orchestration') throw new Error('Missing snapshot');
+          assert.ok(!JSON.stringify(result).includes('secret'));
+          return result.snapshot;
+        };
+        const snapshot = await refresh();
+        assert.equal(snapshot.state, restart ? 'connected' : 'disconnected');
+        assert.equal(snapshot.scope.officeId, 'connected');
+        assert.deepEqual(snapshot.tasks.map(t => t.source.id), restart ? ['remote-task'] : []);
+        const initialCalls = calls; await refresh(); assert.equal(calls, initialCalls);
+        if (restart) {
+          let release!: () => void;
+          gate = new Promise<void>(resolve => { release = resolve; });
+          const reading = new Promise<void>(resolve => { started = resolve; });
+          now += 6000;
+          ws.send(JSON.stringify({ t: 'orchestration.refresh', officeId: 'connected', visible: true }));
+          await reading;
+          ws.send(JSON.stringify({ t: 'floor.go', floor: '@roof' })); await next('floor.enter');
+          release();
+          // Await the coalesced read, then a websocket round trip as a delivery barrier.
+          await floor.provider.refresh!(true);
+          ws.send(JSON.stringify({ t: 'chat', officeId: '@roof', text: 'delivery barrier' })); await next('chat');
+          assert.equal(messages.some(m => m.t === 'orchestration'), false);
+          ws.send(JSON.stringify({ t: 'orchestration.refresh', officeId: 'connected', visible: true }));
+          const denied = await next('toast'); assert.ok(denied.t === 'toast' && /Office context changed/.test(denied.text));
+          ws.send(JSON.stringify({ t: 'floor.go', floor: 'connected' })); await next('floor.enter');
+          gate = undefined; started = undefined;
+          revoked = true; now += 6000;
+          const cleared = await refresh(); assert.equal(cleared.state, 'disconnected'); assert.deepEqual(cleared.tasks, []);
+          const revokedCalls = calls; now += 60000; await refresh(); assert.equal(calls, revokedCalls);
+          assert.equal(floor.local, undefined);
+        }
         for (const type of ['worker.spawn', 'worker.resume', 'station.prompt', 'term.input', 'queue.add', 'queue.retry', 'meeting.start', 'role.assign', 'task.update', 'control']) {
           ws.send(JSON.stringify({ t: type, officeId: 'connected', deskId: 'desk-1', prompt: 'must not run' }));
           const denied = await next('toast'); assert.ok(denied.t === 'toast' && /Local execution is unavailable/.test(denied.text));
@@ -56,6 +110,7 @@ test('connected server startup/restart, arrival, legacy commands and disconnect 
         const file = await fetch(`${origin}/api/changes/file?floor=connected&worker=old-worker&path=x&side=new`, { headers: { cookie } }); assert.equal(file.status, 403);
         const hook = await fetch(`http://127.0.0.1:${app.hookPort}/office/queue?worker=old-worker`, { method: 'POST', headers: { authorization: 'Bearer stale-token' }, body: '{}' }); assert.equal(hook.status, 401);
         floor.provider.disconnect(); floor.arrived();
+        const disconnectedCalls = calls; now += 60000; await refresh(); assert.equal(calls, disconnectedCalls);
         ws.send(JSON.stringify({ t: 'chat', officeId: 'connected', text: 'visual collaboration remains available' })); await next('chat');
         assert.equal(floor.local, undefined);
       } finally { ws.terminate(); }

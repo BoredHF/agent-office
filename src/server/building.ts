@@ -11,6 +11,7 @@ import { atomicJson, backupLegacy } from './persistence.js';
 /** A floor as floors.json keeps it. */
 export interface FloorDef {
   orchestration?: OfficeBinding;
+  setupRequest?: { key: string; fingerprint: string };
   id: string;
   name: string;
   /** owner/name on GitHub. */
@@ -104,6 +105,25 @@ export class Building {
     mkdirSync(def.dir, { recursive: true, mode: 0o700 });
     // Establish a git boundary even when the building lives inside an existing checkout.
     execFileSync('git', ['init', '--quiet', def.dir], { stdio: ['ignore', 'pipe', 'pipe'] });
+    this.defs.push(def);
+    try { this.save(); } catch (err) { this.defs.pop(); throw err; }
+    return def;
+  }
+
+  createConnected(name: string, by: string, binding: OfficeBinding, key: string, fingerprint: string): FloorDef {
+    const validated = officeBinding(binding);
+    if (validated.mode !== 'paperclip') throw new Error('Connected binding required');
+    const existing = this.defs.find(d => d.setupRequest?.key === key);
+    if (existing) {
+      if (existing.setupRequest?.fingerprint !== fingerprint || existing.archivedAt) throw new Error('Creation request conflict');
+      return existing;
+    }
+    if (!name.trim() || this.defs.length >= MAX_FLOORS) throw new Error('Office unavailable');
+    const def = this.newDef(name.trim().slice(0, 100), undefined, '', by);
+    def.orchestration = validated;
+    def.setupRequest = { key, fingerprint };
+    def.dir = path.join(this.dataDir, 'offices', def.id);
+    mkdirSync(def.dir, { recursive: true, mode: 0o700 });
     this.defs.push(def);
     try { this.save(); } catch (err) { this.defs.pop(); throw err; }
     return def;
