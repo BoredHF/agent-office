@@ -80,7 +80,8 @@ try {
               'chat history must survive recreation');
             finish();
           } else {
-            socket.send(JSON.stringify({ t: 'chat', text: proof.marker }));
+            // Echo the server-selected office (null in the lobby), just like the browser.
+            socket.send(JSON.stringify({ t: 'chat', officeId: message.floor, text: proof.marker }));
           }
         }
         if (!again && message.t === 'chat' && message.text === proof.marker) finish();
