@@ -9,6 +9,7 @@ import { excludeFromGit } from './config.js';
 import { configuredProvider } from './agents.js';
 import { WorkerManager, type HookEnv } from './workers.js';
 import { GitHub, MergeWatch } from './github.js';
+import { ChatLog } from './history.js';
 import { TaskQueue } from './queue.js';
 import { Changes } from './changes.js';
 import { Decor } from './decor.js';
@@ -81,6 +82,7 @@ export class Floor {
   readonly workers: WorkerManager;
   readonly github: GitHub;
   readonly queue: TaskQueue;
+  readonly chat: ChatLog;
   readonly changes: Changes;
   readonly decor: Decor;
   readonly jukebox: Jukebox;
@@ -104,6 +106,7 @@ export class Floor {
     const dataDir = path.join(def.dir, '.agent-office');
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
     excludeFromGit(def.dir);
+    this.chat = new ChatLog(dataDir);
     this.project = projectInfo(def.dir, def.name, ctx.agentCmd, ctx.agentArgs);
 
     // Before the workers, so it hears about the ones who wake up needing input.
@@ -166,10 +169,10 @@ export class Floor {
       hiringPaused: () => ctx.ledger.hiringPaused,
       room: () => ctx.capacity.room(),
       emptied: () => {
-        ctx.toast(this, '📋 The queue is empty: every task is done 🎉');
+        ctx.toast(this, '📋 Every attempt finished; check the task board for review 🎉');
         ctx.emit(this, { t: 'gong', why: 'queue' });
       },
-    });
+    }, true);
 
     // Meetings seat their own workers round the meeting room's table and run them round by round.
     this.meetings = new MeetingRoom(
@@ -215,7 +218,7 @@ export class Floor {
     this.decor = new Decor(dataDir);
     this.jukebox = new Jukebox(dataDir);
     this.whiteboard = new Whiteboard(dataDir);
-    this.ready = this.workers.start();
+    this.ready = this.workers.start(this.queue.state().tasks.flatMap((t) => t.workerId ? [t.workerId] : [])).then(() => { this.queue.start(); });
 
     void this.github.refresh();
     // A floor with people on it, or work under way, keeps its boards fresh; the others check in now and then.

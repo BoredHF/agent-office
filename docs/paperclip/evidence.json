@@ -1,0 +1,21 @@
+{
+  "capturedAt": "2026-09-28T15:28:21.932Z",
+  "apiVersion": "1.0.0",
+  "fullOpenApiSha256": "1f4f6c0eb89733774ff86c1a0be98003b0d79012136b2b228da18e1441dc4b74",
+  "sourcePlanRevision": "12c37805-d0dc-4bf7-8c38-cfaffdd2fd9b",
+  "repositoryBase": "7f200ded993d381b536a74bd1f3b72cab769b1fd",
+  "probes": "GET only; runtime agent JWT, not deployment identity; no credential creation/revocation or task mutation probes",
+  "schemaSubsetPaths": [
+    "/api/companies/{companyId}/projects",
+    "/api/companies/{companyId}/agents",
+    "/api/companies/{companyId}/issues",
+    "/api/companies/{companyId}/activity",
+    "/api/companies/{companyId}/agent-configurations",
+    "/api/issues/{id}",
+    "/api/issues/{id}/comments",
+    "/api/agents/{id}/keys",
+    "/api/agents/{id}/keys/{keyId}",
+    "/api/board-api-keys",
+    "/api/board-api-keys/{keyId}"
+  ]
+}

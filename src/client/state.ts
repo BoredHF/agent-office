@@ -279,6 +279,8 @@ class Store {
         for (const t of ['peers', 'chat', 'upgrade', 'usage', 'limits', 'me', 'notify', 'machine', 'floors', 'projectsDir', 'sky', 'theme'] as Topic[]) this.emit(t);
         break;
       case 'floor.enter':
+        this.chat = msg.chat ?? [];
+        this.emit('chat');
         this.peers = new Map(msg.peers.map((p) => [p.id, p]));
         this.enter(msg);
         this.emit('peers');

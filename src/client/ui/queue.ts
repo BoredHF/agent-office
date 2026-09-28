@@ -1,3 +1,5 @@
+import { compareTaskPriority } from '../../shared/protocol';
+import { openRoles, openTask, taskPickers } from './workflow';
 import type { AgentProvider, QueueTask, Usage } from '../../shared/protocol';
 import type { Net } from '../net';
 import { store } from '../state';
@@ -34,6 +36,7 @@ function outcome(t: QueueTask): string {
 }
 
 export function openQueue(net: Net, actions: QueueActions) {
+  const officeId = store.floor;
   const body = h('div.body.queue');
   const close = h('button.btn.close', { 'aria-label': 'Close' }, '✕');
   const limitValue = h('b');
@@ -45,7 +48,7 @@ export function openQueue(net: Net, actions: QueueActions) {
   const el = h(
     'div.modal',
     { role: 'dialog', 'aria-label': 'Task queue', style: 'width:min(800px,100%)' },
-    h('header', {}, h('h2', {}, '📋 Task queue'), limit, close),
+    h('header', {}, h('h2', {}, '📋 Task queue'), h('button.btn', { onclick: () => openRoles(net) }, 'Roles'), limit, close),
     body,
     h('footer', {}, h('span.grow', {}, 'The queue keeps going while you are away. Set “workers at once” to 0 to pause it.')),
   );
@@ -53,7 +56,8 @@ export function openQueue(net: Net, actions: QueueActions) {
   const ta = h('textarea', { rows: 2, placeholder: 'Describe a task for the next free worker…', 'aria-label': 'New task' }) as HTMLTextAreaElement;
   const provider = providerPicker(store.project, 'queue-provider', 'Provider', 'queue');
   const addBtn = h('button.btn.primary', { type: 'submit' }, 'Add to queue');
-  const form = h('form.queue-add', {}, ta, provider.element, addBtn) as HTMLFormElement;
+  let pickers = taskPickers();
+  const form = h('form.queue-add', {}, ta, provider.element, pickers.element, addBtn) as HTMLFormElement;
   form.noValidate = true;
   const submit = () => {
     const text = ta.value.trim();
@@ -62,7 +66,7 @@ export function openQueue(net: Net, actions: QueueActions) {
       return;
     }
     if (!provider.valid()) return;
-    net.send({ t: 'queue.add', prompt: text, provider: provider.value(), model: provider.model(), effort: provider.effort() });
+    net.send({ t: 'queue.add', officeId, ...pickers.value(), prompt: text, provider: provider.value(), model: provider.model(), effort: provider.effort() });
     ta.value = '';
   };
   form.addEventListener('submit', (e) => {
@@ -83,8 +87,8 @@ export function openQueue(net: Net, actions: QueueActions) {
 
   const row = (t: QueueTask): HTMLElement => {
     const w = t.workerId ? store.workers.get(t.workerId) : undefined;
-    const meta: string[] = [];
-    const buttons: HTMLElement[] = [];
+    const meta: string[] = [t.priority ?? 'medium', t.lastUpdate ?? '', w?.activity ?? ''].filter(Boolean);
+    const buttons: HTMLElement[] = [h('button.btn', { onclick: () => openTask(net, t) }, 'Details / review')];
     const badge = modelBadge(t.provider, t.model, t.effort);
     const model = badge ? ` · initial: ${badge}` : '';
     const usageSuffix = (provider: AgentProvider | undefined, usage?: Usage) => {
@@ -110,13 +114,13 @@ export function openQueue(net: Net, actions: QueueActions) {
         );
       }
     } else if (t.status === 'queued') {
-      const queued = store.queue.tasks.filter((x) => x.status === 'queued');
+      const queued = store.queue.tasks.filter((x) => x.status === 'queued').sort(compareTaskPriority);
       const i = queued.indexOf(t);
       pos = String(i + 1);
       meta.push(`⚙️ ${providerLabel(t.provider, store.project)}${model}${usageSuffix(t.provider, w?.usage)}`);
       meta.push(`added by ${t.addedBy} ${timeAgo(t.addedAt)}`);
-      buttons.push(h('button.btn', { type: 'button', title: 'Move up', 'aria-label': 'Move up', disabled: i === 0, onclick: () => net.send({ t: 'queue.move', taskId: t.id, delta: -1 }) }, '↑'));
-      buttons.push(h('button.btn', { type: 'button', title: 'Move down', 'aria-label': 'Move down', disabled: i === queued.length - 1, onclick: () => net.send({ t: 'queue.move', taskId: t.id, delta: 1 }) }, '↓'));
+      buttons.push(h('button.btn', { type: 'button', title: 'Move up', 'aria-label': 'Move up', disabled: i === 0 || queued[i - 1]?.priority !== t.priority, onclick: () => net.send({ t: 'queue.move', taskId: t.id, delta: -1 }) }, '↑'));
+      buttons.push(h('button.btn', { type: 'button', title: 'Move down', 'aria-label': 'Move down', disabled: i === queued.length - 1 || queued[i + 1]?.priority !== t.priority, onclick: () => net.send({ t: 'queue.move', taskId: t.id, delta: 1 }) }, '↓'));
       buttons.push(h('button.btn', { type: 'button', title: 'Remove from the queue', 'aria-label': 'Remove', onclick: () => net.send({ t: 'queue.remove', taskId: t.id }) }, '✕'));
     } else {
       meta.push(`⚙️ ${providerLabel(t.provider, store.project)}${model}${usageSuffix(t.provider, w?.usage)}`);
@@ -147,7 +151,7 @@ export function openQueue(net: Net, actions: QueueActions) {
     limitValue.textContent = q.maxWorkers === 0 ? 'Paused' : String(q.maxWorkers);
     minus.toggleAttribute('disabled', q.maxWorkers <= 0);
     const running = q.tasks.filter((t) => t.status === 'running');
-    const queued = q.tasks.filter((t) => t.status === 'queued');
+    const queued = q.tasks.filter((t) => t.status === 'queued').sort(compareTaskPriority);
     const done = q.tasks.filter((t) => t.status === 'done').slice().reverse();
     const m = store.machine;
     const parts: (HTMLElement | null)[] = [
@@ -165,8 +169,11 @@ export function openQueue(net: Net, actions: QueueActions) {
         : null,
       section('🤖 Working on it', running),
       section('⏳ Up next', queued),
-      section('✅ Finished', done, h('button.btn', { type: 'button', onclick: () => net.send({ t: 'queue.clear' }) }, 'Clear')),
-      running.length + queued.length + done.length ? null : h('div.queue-empty', {}, 'Nothing on the queue yet.'),
+      section('🚧 Blocked', q.tasks.filter((t) => t.status === 'blocked')),
+      section('🔎 Awaiting review', q.tasks.filter((t) => t.status === 'review')),
+      q.error ? h('p', { role: 'alert' }, q.error) : null,
+      section('✅ Accepted', done, h('button.btn', { type: 'button', onclick: () => net.send({ t: 'queue.clear' }) }, 'Clear')),
+      q.tasks.length ? null : h('div.queue-empty', {}, 'Nothing on the queue yet.'),
     ];
     list.replaceChildren(...parts.filter((n): n is HTMLElement => n !== null));
   };
@@ -179,7 +186,8 @@ export function openQueue(net: Net, actions: QueueActions) {
     full = k;
     render();
   };
-  const unsubs = [store.on('queue', render), store.on('workers', render), store.on('issues', render), store.on('machine', machineChanged)];
+  const refreshPickers = () => { const next = taskPickers({ ...pickers.value() } as QueueTask); pickers.element.replaceWith(next.element); pickers = next; };
+  const unsubs = [store.on('queue', refreshPickers), store.on('workers', refreshPickers), store.on('floor', () => modal.close()), store.on('queue', render), store.on('workers', render), store.on('issues', render), store.on('machine', machineChanged)];
   const tick = setInterval(render, 30_000);
   const modal = openModal(el, {
     doing: '📥 at the queue',

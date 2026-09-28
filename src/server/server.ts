@@ -1,7 +1,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { randomBytes } from 'node:crypto';
-import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, mkdirSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Duplex } from 'node:stream';
 import { fileURLToPath } from 'node:url';
@@ -180,7 +180,8 @@ export async function startServer(cfg: Config) {
   const auth = new Auth(cfg.verifier, cfg.salt, cfg.secret, accounts);
   const clients = new Map<string, Client>();
   // Kept on disk, so a restart doesn't wipe it.
-  const chat = new ChatLog(cfg.dataDir);
+  mkdirSync(path.join(cfg.dataDir, 'rooftop'), { recursive: true, mode: 0o700 });
+  const chat = new ChatLog(path.join(cfg.dataDir, 'rooftop'));
   // The arcade's high scores: one table for the whole building, on every floor's cabinet. The office
   // follows every game and puts the scores up itself (see Arcade).
   const highScores = new HighScores(cfg.dataDir);
@@ -236,6 +237,7 @@ export async function startServer(cfg: Config) {
   };
   const floorInfos = (): FloorInfo[] => [
     ...[...floors.values()].map((f) => f.info()),
+    ...building.list().filter((d) => d.archivedAt).map((d) => ({ ...d, workers: 0, busy: 0, waiting: 0, people: 0 })),
     ...building.pending().map((d) => ({ id: d.id, name: d.name, repo: d.repo, dir: d.dir, palette: d.palette, addedBy: d.addedBy, addedAt: d.addedAt, cloning: true, workers: 0, busy: 0, waiting: 0, people: 0 })),
   ];
   // The elevator's counts change with every worker update; tell everyone at most a few times a second.
@@ -454,7 +456,18 @@ export async function startServer(cfg: Config) {
   };
   // Started in a project: it's a floor too (the one it has always been).
   if (cfg.project) building.ensureLocal(cfg.project, 'the office');
-  for (const def of building.list()) openFloor(def);
+  else if (!building.list().length && ['workers.json', 'queue.json'].some((file) => existsSync(path.join(cfg.dataDir, file)))) building.ensureLocal(cfg.dir, 'the office');
+  // Legacy building-wide chat belongs to the default office, never to every office.
+  const defaultOffice = building.list()[0];
+  const oldChat = path.join(cfg.dataDir, 'chat.jsonl');
+  if (defaultOffice && existsSync(oldChat)) {
+    const destination = path.join(defaultOffice.dir, '.agent-office', 'chat.jsonl');
+    if (destination !== oldChat && !existsSync(destination)) {
+      mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
+      copyFileSync(oldChat, destination);
+    }
+  }
+  for (const def of building.list()) if (!def.archivedAt) openFloor(def);
   // Workers still running from the last office are back at their desks before anyone walks in.
   await Promise.all([...floors.values()].map((f) => f.ready));
 
@@ -506,6 +519,7 @@ export async function startServer(cfg: Config) {
     workers: floor?.workers.list() ?? [],
     issues: floor?.github.issues ?? { items: [], fetchedAt: 0, loading: false },
     pulls: floor?.github.pulls ?? { items: [], fetchedAt: 0, loading: false },
+    chat: floor?.chat.recent(50) ?? chat.recent(50),
     queue: floor?.queue.state() ?? { tasks: [], maxWorkers: 0 },
     decor: floor?.decor.list() ?? [],
     services: servicesState(floor),
@@ -617,7 +631,7 @@ export async function startServer(cfg: Config) {
     q = q.slice(0, SEARCH_MAX);
     const needle = searchKey(q);
     if (needle.length < SEARCH_MIN) return { q, chat: [], terminals: [], more: false };
-    const said = chat.search(needle, SEARCH_CHAT_HITS);
+    const said = (floor?.chat ?? chat).search(needle, SEARCH_CHAT_HITS);
     const shown = floor?.workers.search(needle, SEARCH_TERMINAL_HITS) ?? { hits: [], more: false };
     return { q, chat: said.hits, terminals: shown.hits, more: said.more || shown.more };
   };
@@ -896,7 +910,7 @@ export async function startServer(cfg: Config) {
       floors: floorInfos(),
       projectsDir: building.projectsDirState(),
       ice: cfg.iceServers,
-      chat: chat.recent(50),
+      chat: floor?.chat.recent(50) ?? chat.recent(50),
       invites: team.available,
       version: upgrader.version,
       upgrade: upgrader.state,
@@ -928,7 +942,7 @@ export async function startServer(cfg: Config) {
         return;
       }
       if (!msg || typeof msg !== 'object' || client.out) return;
-      handleMessage(client, msg);
+      try { handleMessage(client, msg); } catch (err) { warn(client, (err as Error).message); }
     });
     ws.on('close', () => {
       clients.delete(id);
@@ -1025,6 +1039,12 @@ export async function startServer(cfg: Config) {
 
   const handleMessage = (c: Client, msg: ClientMsg) => {
     const who = c.peer.name;
+    // Old tabs must reload before issuing mutations; otherwise a delayed command can hit a new office.
+    const contextFree = ['ping', 'floor.go', 'floor.repos', 'office.create', 'office.rename', 'office.archive'];
+    if (!contextFree.includes(msg.t) && msg.officeId !== (c.peer.floor ?? null)) {
+      warn(c, 'Office context changed or client is outdated; reload before trying again');
+      return;
+    }
     /** The floor `c` is on, or a note to them that they have to be on one. */
     const here = (): Floor | undefined => {
       const f = floorOf(c);
@@ -1034,8 +1054,10 @@ export async function startServer(cfg: Config) {
     /** A worker by id, with the floor it sits on. */
     const worker = (id: unknown) => {
       const wid = str(id, 32);
-      const floor = workerFloor(wid);
-      return floor ? { wid, floor, info: floor.workers.get(wid)! } : undefined;
+      const floor = floorOf(c);
+      const info = floor?.workers.get(wid);
+      if (!floor || !info) { warn(c, 'No such worker in this office'); return undefined; }
+      return { wid, floor, info };
     };
     switch (msg.t) {
       case 'move': {
@@ -1116,8 +1138,10 @@ export async function startServer(cfg: Config) {
         const text = str(msg.text, 500).trim();
         if (!text) break;
         const line: ChatLine = { from: c.id, name: who, color: c.peer.color, text, at: Date.now(), ...(c.accountId ? { account: true } : {}) };
-        chat.add(line);
-        broadcast({ t: 'chat', ...line });
+        const floor = floorOf(c);
+        (floor?.chat ?? chat).add(line);
+        if (floor) toFloor(floor, { t: 'chat', ...line });
+        else for (const peer of clients.values()) if (peer.peer.floor === c.peer.floor) sendTo(peer, { t: 'chat', ...line });
         break;
       }
       case 'floor.go': {
@@ -1152,7 +1176,44 @@ export async function startServer(cfg: Config) {
             console.log(`  ${who} added a floor for ${r.repo} (${r.dir})`);
             toastAll(`🛗 New floor: ${r.name}, added by ${who}`);
             sendTo(c, { t: 'floor.added', repo, floor: floor.id });
-          });
+          }).catch((err) => warn(c, String(err)));
+        break;
+      }
+      case 'office.create': {
+        const def = building.create(str(msg.name, 100), who);
+        const floor = openFloor(def);
+        floorsChanged();
+        if (!floor) { warn(c, 'Office saved but could not open; check server logs'); break; }
+        void floor.ready.then(() => goToFloor(c, floor)).catch((err) => warn(c, String(err)));
+        break;
+      }
+      case 'office.rename': {
+        building.rename(str(msg.officeId, 64), str(msg.name, 100));
+        const floor = floors.get(msg.officeId);
+        if (floor) {
+          floor.project.name = floor.def.name;
+          for (const peer of clients.values()) if (peer.peer.floor === floor.id) sendTo(peer, { t: 'floor.enter', peers: [...clients.values()].map((x) => x.peer), ...floorView(floor) });
+        }
+        floorsChanged();
+        break;
+      }
+      case 'office.archive': {
+        const id = str(msg.officeId, 64);
+        const floor = floors.get(id);
+        if (msg.archived && floor) {
+          if (floor.workers.list().some((w) => !['done', 'exited', 'offline'].includes(w.status))
+            || floor.queue.state().tasks.some((t) => ['queued', 'running'].includes(t.status))
+            || floor.queue.state().error) { warn(c, 'Finish or block queued work and stop active agents before archiving'); break; }
+          building.archive(id, true);
+          for (const peer of clients.values()) if (peer.peer.floor === id) goToRoof(peer);
+          floor.shutdown();
+          floors.delete(id);
+        } else if (!msg.archived) {
+          building.archive(id, false);
+          const def = building.list().find((d) => d.id === id)!;
+          if (!floor) openFloor(def);
+        }
+        floorsChanged();
         break;
       }
       case 'floor.projectsDir': {
@@ -1271,7 +1332,7 @@ export async function startServer(cfg: Config) {
         break;
       }
       case 'term.input':
-        if (c.attached.has(msg.workerId)) workerFloor(msg.workerId)?.workers.write(msg.workerId, str(msg.data, 64 * 1024), who);
+        if (c.attached.has(msg.workerId)) floorOf(c)?.workers.write(msg.workerId, str(msg.data, 64 * 1024), who);
         break;
       case 'term.typing': {
         // Everyone else in that terminal sees who's typing. A typist says so about once a second.
@@ -1294,7 +1355,7 @@ export async function startServer(cfg: Config) {
         break;
       }
       case 'term.resize':
-        if (c.attached.has(msg.workerId)) workerFloor(msg.workerId)?.workers.resize(msg.workerId, num(msg.cols), num(msg.rows));
+        if (c.attached.has(msg.workerId)) floorOf(c)?.workers.resize(msg.workerId, num(msg.cols), num(msg.rows));
         break;
       case 'gh.refresh':
         void floorOf(c)?.github.refresh();
@@ -1372,11 +1433,21 @@ export async function startServer(cfg: Config) {
         const issue = Number.isInteger(msg.issue) && (msg.issue as number) > 0 ? (msg.issue as number) : undefined;
         const model = msg.model === undefined ? undefined : str(msg.model, OPEN_CODE_MODEL_MAX + 1);
         const effort = isAgentEffort(msg.effort) ? msg.effort : undefined;
-        const err = floor.queue.add(str(msg.prompt, 20000), who, str(msg.title, 200), issue, msg.provider, model, effort);
+        const err = floor.queue.add(str(msg.prompt, 20000), who, str(msg.title, 200), issue, msg.provider, model, effort, { priority: msg.priority, roleId: msg.roleId, assigneeId: msg.assigneeId });
         if (err) warn(c, err);
         else toastFloor(floor, `📋 ${who} queued ${issue !== undefined ? `issue #${issue}` : 'a task'}`);
         break;
       }
+      case 'task.update': {
+        if (msg.update && typeof msg.update === 'object') warn(c, here()?.queue.update(str(msg.taskId, 32), num(msg.version), msg.update, who));
+        break;
+      }
+      case 'role.save':
+        warn(c, here()?.queue.saveRole(msg.role, msg.version));
+        break;
+      case 'role.assign':
+        warn(c, here()?.queue.assignRole(str(msg.workerId, 32), str(msg.roleId, 32)));
+        break;
       case 'queue.remove': {
         const floor = here();
         if (floor) warn(c, floor.queue.remove(str(msg.taskId, 32)));
@@ -1483,8 +1554,8 @@ export async function startServer(cfg: Config) {
       case 'changes.diff': {
         const workerId = str(msg.workerId, 32);
         const file = str(msg.path, 4096);
-        const floor = workerFloor(workerId);
-        if (!floor) {
+        const floor = floorOf(c);
+        if (!floor?.workers.get(workerId)) {
           sendTo(c, { t: 'changes.diff', workerId, path: file, diff: '', truncated: false, error: 'No such worker' });
           break;
         }
@@ -1726,7 +1797,7 @@ export async function startServer(cfg: Config) {
     for (const c of clients.values()) {
       if (!c.stale.size || c.ws.bufferedAmount > SLOW_CLIENT_BYTES / 8) continue;
       for (const wid of c.stale) {
-        const snap = c.attached.has(wid) ? workerFloor(wid)?.workers.attach(wid, c.id, c.peer.name) : undefined;
+        const snap = c.attached.has(wid) ? floorOf(c)?.workers.attach(wid, c.id, c.peer.name) : undefined;
         if (snap) sendTo(c, { t: 'term.snapshot', workerId: wid, ...snap });
       }
       c.stale.clear();

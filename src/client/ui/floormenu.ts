@@ -11,6 +11,7 @@ import { h } from './dom';
 export interface FloorMenuOptions {
   /** Go to that floor, staying where you are in the office. */
   go(floorId: string): void;
+  offices(): void;
   /** Open the elevator's panel, to add a project. */
   elevator(): void;
   /** Up to the rooftop bar, by elevator. */
@@ -61,7 +62,7 @@ export function toggleFloorMenu(anchor: HTMLElement, opts: FloorMenuOptions): vo
   };
 
   const render = () => {
-    const floors = store.floors;
+    const floors = store.floors.filter((f) => !f.archivedAt);
     const here = floors.findIndex((f) => f.id === store.floor);
     const add = h('button.floor-item.add', { type: 'button', role: 'menuitem', title: 'The elevator: add another project as a floor' }, h('span.floor-no', {}, '🛗'), h('span.floor-text', {}, h('span.floor-name', {}, 'Elevator'), h('span.floor-sub', {}, 'Add a project…')));
     add.addEventListener('click', () => {
@@ -84,7 +85,7 @@ export function toggleFloorMenu(anchor: HTMLElement, opts: FloorMenuOptions): vo
       close();
       opts.roof();
     });
-    el.replaceChildren(h('div.floor-menu-head', {}, `🏢 ${floors.length} floor${floors.length === 1 ? '' : 's'}`), ...(floors.length ? [roof] : []), ...items, add);
+    el.replaceChildren(h('div.floor-menu-head', {}, `🏢 ${floors.length} floor${floors.length === 1 ? '' : 's'}`), ...(floors.length ? [roof] : []), ...items, h('button.floor-item', { onclick: () => { close(); opts.offices(); } }, 'Manage offices…'), add);
   };
 
   const place = () => {

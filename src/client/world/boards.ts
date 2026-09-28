@@ -1,3 +1,4 @@
+import { compareTaskPriority } from '../../shared/protocol';
 import * as THREE from 'three';
 import { DESK_BY_ID } from '../../shared/layout';
 import type { GhIssue, GhPull, GhState, QueueState, QueueTask, ServiceInfo, WorkerInfo } from '../../shared/protocol';
@@ -291,7 +292,7 @@ export class QueueBoardTexture {
   render(state: QueueState, workers: Map<string, WorkerInfo>) {
     const name = (t: QueueTask) => (t.issue !== undefined ? `#${t.issue}  ${t.title.replace(new RegExp(`^#${t.issue}\\s*`), '')}` : t.title);
     const running = state.tasks.filter((t) => t.status === 'running');
-    const queued = state.tasks.filter((t) => t.status === 'queued');
+    const queued = state.tasks.filter((t) => t.status === 'queued').sort(compareTaskPriority);
     const done = state.tasks.filter((t) => t.status === 'done').slice(-3).reverse();
     const rows = [
       ...running.map((t) => {
@@ -300,6 +301,7 @@ export class QueueBoardTexture {
         return { icon: '🤖', text: name(t), side: `${t.workerName ?? 'a worker'} · ${st}`, color: '#1e8f4e' };
       }),
       ...queued.map((t, i) => ({ icon: '⏳', text: name(t), side: i === 0 ? 'up next' : `${i + 1}${['th', 'st', 'nd', 'rd'][i + 1 <= 3 ? i + 1 : 0]} in line`, color: '#2b2d42' })),
+      ...state.tasks.filter((t) => t.status === 'blocked' || t.status === 'review').map((t) => ({ icon: t.status === 'review' ? '🔎' : '⚠️', text: name(t), side: t.status === 'review' ? 'awaiting review' : 'blocked', color: '#b88713' })),
       ...done.map((t) => ({
         icon: t.outcome === 'done' ? '✅' : '⚠️',
         text: name(t),
