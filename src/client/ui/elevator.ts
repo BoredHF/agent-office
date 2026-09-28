@@ -3,6 +3,7 @@ import { floorPalette, normalizeRepo, sameRepo } from '../../shared/floors';
 import { ROOF, ROOF_NAME } from '../../shared/rooftop';
 import type { Net } from '../net';
 import { store } from '../state';
+import { openOffices } from './workflow';
 import { h, openModal, timeAgo, type Modal } from './dom';
 
 // The elevator's panel: a button for every floor (every project), and "add a project", which clones
@@ -34,14 +35,14 @@ export function elevatorPanelOpen(): boolean {
 
 export function openElevator(opts: ElevatorOptions): void {
   if (current) return;
-  // Nowhere to go yet: the panel stays until there's a floor to ride to.
+  // Setup offers both local offices and repository-backed floors.
   const setup = !store.floor;
   const { net } = opts;
   let filter = '';
   let selected: string | null = null;
   let adding: string | null = null;
   let error = '';
-  let showAdd = setup || !store.floors.filter((f) => !f.archivedAt).length;
+  let showAdd = false;
   /** The search box and list are in place (rebuilding them would lose the focus mid-typing). */
   let built = false;
 
@@ -52,7 +53,7 @@ export function openElevator(opts: ElevatorOptions): void {
   const statusEl = h('div');
   const addBtn = h('button.btn.primary', { type: 'button' }, '🛗 Add floor');
   const refreshBtn = h('button.btn', { type: 'button', title: 'Ask GitHub for the list again' }, '↻');
-  const close = setup ? null : h('button.btn.close', { 'aria-label': 'Close' }, '✕');
+  const close = h('button.btn.close', { 'aria-label': 'Close' }, '✕');
 
   const needRepos = () => {
     const r = store.repos;
@@ -110,10 +111,10 @@ export function openElevator(opts: ElevatorOptions): void {
   };
 
   const renderFloors = () => {
-    const floors = store.floors;
+    const floors = store.floors.filter((f) => !f.archivedAt);
     floorsEl.replaceChildren(
       ...(floors.some((f) => !f.cloning) ? [roofButton()] : []),
-      ...(floors.length ? floors.map(floorButton) : [h('p.empty', {}, 'No floors yet.')]),
+      ...(floors.length ? floors.map(floorButton) : [h('p.empty', {}, 'No offices yet. Create a local office or add a repository project.')]),
     );
   };
 
@@ -244,21 +245,21 @@ export function openElevator(opts: ElevatorOptions): void {
         {},
         store.floors.length
           ? 'Every project is a floor of this building. Pick a floor to ride to, or add another project.'
-          : "Every project is a floor of this building, and it doesn't have any yet. Pick one of your repositories: the office clones it and it becomes the first floor.",
+          : "Start with a local office, or add a repository project. Each office keeps its own agents, roles, tasks and activity.",
       )
     : null;
   const el = h(
     'div.modal.elevator',
     { role: 'dialog', 'aria-label': 'Elevator' },
     h('header', {}, h('h2', {}, setup ? '🏢 Welcome to Agent Office' : '🛗 Elevator'), close),
-    h('div.body', {}, intro, floorsEl, addEl),
+    h('div.body', {}, intro, h('button.btn.primary', { type: 'button', onclick: () => { modal.close(); openOffices(net); } }, 'Create office'), floorsEl, addEl),
     h('footer', {}, h('span.grow', {}, setup ? 'Your office, one floor per project' : 'Pick a floor · Esc to stay here'), addBtn),
   );
   const unsubs = [store.on('floors', () => (renderFloors(), renderAdd())), store.on('repos', renderAdd), store.on('projectsDir', renderAdd), store.on('floor', renderFloors), store.on('peers', renderFloors)];
   const modal = openModal(el, {
     doing: '🛗 at the elevator',
-    escCloses: !setup,
-    backdropCloses: !setup,
+    escCloses: true,
+    backdropCloses: true,
     onClose: () => {
       current = null;
       addedWaiters.delete(onAdded);

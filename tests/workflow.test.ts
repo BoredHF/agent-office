@@ -26,7 +26,7 @@ function fixture(t: { after(fn: () => void): void }) {
     };
     const q = new TaskQueue(dir, manager, false, { update() {}, toast() {}, claimIssue: async () => undefined, refreshGitHub() {}, hiringPaused: () => undefined, emptied() {} }, defer);
     queues.push(q);
-    return { q, workers, prompts, dir };
+    return { q, workers, prompts, dir, manager };
   };
   return { root, open };
 }
@@ -143,4 +143,37 @@ test('write failures stop dispatch; malformed stores cannot be silently reset', 
   writeFileSync(path.join(a.dir, 'queue.json'), '{bad');
   const b = f.open('a'); assert.match(b.q.add('No reset', 'Owner')!, /could not be read/);
   assert.equal(readFileSync(path.join(a.dir, 'queue.json'), 'utf8'), '{bad');
+});
+
+test('Queue next attempt clears the accepted result before a new attempt without a PR', (t) => {
+  const f = fixture(t); const a = f.open('a'); a.q.add('Work', 'Owner');
+  a.workers[0].status = 'done'; a.q.onWorker(a.workers[0]);
+  let task = a.q.state().tasks[0];
+  a.q.update(task.id, task.version!, { status: 'done' }, 'Reviewer');
+  a.q.shutdown();
+  const saved = JSON.parse(readFileSync(path.join(a.dir, 'queue.json'), 'utf8'));
+  Object.assign(saved.tasks[0], { branch: 'old-branch', pr: { number: 9, url: 'old', state: 'OPEN', title: 'Old' }, roleSnapshot: { id: 'old', name: 'Old', responsibilities: '', instructions: '', version: 1 } });
+  saved.maxWorkers = 0; writeFileSync(path.join(a.dir, 'queue.json'), JSON.stringify(saved));
+  const b = f.open('a', a.workers); task = b.q.state().tasks[0];
+  const oldAttempt = task.attemptId;
+  assert.equal(b.q.update(task.id, task.version!, { status: 'queued' }, 'Owner'), undefined);
+  task = b.q.state().tasks[0];
+  for (const key of ['workerId', 'workerName', 'attemptId', 'roleSnapshot', 'branch', 'pr', 'startedAt', 'finishedAt', 'reviewedBy', 'outcome', 'error'] as const) assert.equal(task[key], undefined, key);
+  assert.ok(task.history!.some((h) => h.attemptId === oldAttempt));
+  b.q.setLimit(1); b.workers.at(-1)!.status = 'done'; b.q.onWorker(b.workers.at(-1)!);
+  task = b.q.state().tasks[0]; assert.equal(task.status, 'review'); assert.notEqual(task.attemptId, oldAttempt);
+  assert.equal(task.pr, undefined); assert.equal(task.reviewedBy, undefined);
+});
+
+
+test('assigned worker is durably associated and held before its prompt is sent', (t) => {
+  const f = fixture(t); const a = f.open('a'); a.q.add('First', 'Owner');
+  const worker = a.workers[0]; worker.status = 'done'; a.q.onWorker(worker);
+  const held = new Set<string>(); a.manager.holdRecovery = (id) => { held.add(id); };
+  a.manager.prompt = (id) => {
+    const intent = JSON.parse(readFileSync(path.join(a.dir, 'queue.json'), 'utf8')).tasks.at(-1);
+    assert.equal(intent.workerId, id); assert.ok(held.has(id));
+    throw new Error('interrupted prompt');
+  };
+  assert.throws(() => a.q.add('Assigned', 'Owner', undefined, undefined, 'custom', undefined, undefined, { assigneeId: worker.id }), /interrupted prompt/);
 });

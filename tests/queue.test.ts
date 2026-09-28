@@ -1,3 +1,4 @@
+import { SEATS } from '../src/shared/layout.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -23,6 +24,7 @@ function fixture(defaultProvider: AgentProvider = 'claude') {
       workers.push(worker);
       return worker;
     },
+    prompt(id) { workers.find((w) => w.id === id)!.status = 'working'; },
     kill(id) {
       // Gone from the desks right away, the way the real one does it (before its worktree is dealt with).
       const i = workers.findIndex((w) => w.id === id);
@@ -211,4 +213,18 @@ test('an office at its worker limit holds the queue, and a finished queue worker
   // Room again: it carries on.
   limit = 2; q.pump();
   assert.equal(q.state().tasks[2].status, 'running');
+});
+
+test('full desks preserve a finished worker assigned to a lower-priority queued task', (t) => {
+  const f = fixture(); t.after(() => f.close()); const q = f.open();
+  q.add('First', 'Owner'); const assigned = f.workers[0]; assigned.status = 'done'; q.onWorker(assigned);
+  q.setLimit(0);
+  q.add('Urgent unassigned', 'Owner', undefined, undefined, 'claude', undefined, undefined, { priority: 'urgent' });
+  q.add('Reserved', 'Owner', undefined, undefined, 'claude', undefined, undefined, { assigneeId: assigned.id });
+  // Occupy every remaining seat with workers the queue cannot recycle.
+  for (const seat of SEATS) if (!f.workers.some((w) => w.deskId === seat.id)) f.workers.push({ ...assigned, id: seat.id, deskId: seat.id });
+  q.setLimit(1);
+  assert.ok(f.workers.some((w) => w.id === assigned.id));
+  assert.equal(q.state().tasks.find((task) => task.title === 'Reserved')!.status, 'running');
+  assert.equal(q.state().tasks.find((task) => task.title === 'Urgent unassigned')!.status, 'queued');
 });
