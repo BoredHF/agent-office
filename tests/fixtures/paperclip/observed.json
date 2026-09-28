@@ -1,0 +1,503 @@
+{
+  "capturedAt": "2026-09-28T15:28:21.932Z",
+  "redaction": "Selected structural fields only; IDs consistently replaced. Names, text, configs, environment, metadata, URLs and credentials omitted.",
+  "records": {
+    "agents": {
+      "status": 200,
+      "body": [
+        {
+          "id": "redacted-1",
+          "companyId": "redacted-2",
+          "status": "running",
+          "role": "engineer"
+        },
+        {
+          "id": "redacted-3",
+          "companyId": "redacted-2",
+          "status": "running",
+          "role": "qa"
+        },
+        {
+          "id": "redacted-4",
+          "companyId": "redacted-2",
+          "status": "running",
+          "role": "engineer"
+        },
+        {
+          "id": "redacted-5",
+          "companyId": "redacted-2",
+          "status": "idle",
+          "role": "engineer"
+        },
+        {
+          "id": "redacted-6",
+          "companyId": "redacted-2",
+          "status": "idle",
+          "role": "engineer"
+        },
+        {
+          "id": "redacted-7",
+          "companyId": "redacted-2",
+          "status": "idle",
+          "role": "general"
+        }
+      ]
+    },
+    "projects": {
+      "status": 200,
+      "body": [
+        {
+          "id": "redacted-8",
+          "companyId": "redacted-2",
+          "status": "in_progress"
+        }
+      ]
+    },
+    "issues": {
+      "status": 200,
+      "body": [
+        {
+          "id": "redacted-9",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "blocked",
+          "statusVersion": 5,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-7",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:37.792Z"
+        }
+      ]
+    },
+    "all": {
+      "status": 200,
+      "body": [
+        {
+          "id": "redacted-9",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "blocked",
+          "statusVersion": 5,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-7",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:37.792Z"
+        },
+        {
+          "id": "redacted-10",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "blocked",
+          "statusVersion": 0,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-3",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:36.988Z"
+        },
+        {
+          "id": "redacted-11",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "blocked",
+          "statusVersion": 0,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-4",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:36.825Z"
+        },
+        {
+          "id": "redacted-12",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "blocked",
+          "statusVersion": 0,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-1",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:36.674Z"
+        },
+        {
+          "id": "redacted-13",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "in_progress",
+          "statusVersion": 1,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-4",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:36.664Z"
+        },
+        {
+          "id": "redacted-14",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "blocked",
+          "statusVersion": 0,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-5",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:36.500Z"
+        },
+        {
+          "id": "redacted-15",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "in_progress",
+          "statusVersion": 1,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-1",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:36.478Z"
+        },
+        {
+          "id": "redacted-16",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "blocked",
+          "statusVersion": 0,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-1",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:36.387Z"
+        },
+        {
+          "id": "redacted-17",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "blocked",
+          "statusVersion": 7,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-7",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:21:28.515Z"
+        },
+        {
+          "id": "redacted-18",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "in_progress",
+          "statusVersion": 4,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-3",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:21:09.727Z"
+        },
+        {
+          "id": "redacted-19",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 3,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-6",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:09:39.766Z"
+        },
+        {
+          "id": "redacted-20",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 2,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-5",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:55:12.137Z"
+        },
+        {
+          "id": "redacted-21",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 2,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-6",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:40:39.555Z"
+        },
+        {
+          "id": "redacted-22",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 7,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-7",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:40:34.136Z"
+        },
+        {
+          "id": "redacted-23",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 2,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-3",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:34:56.662Z"
+        },
+        {
+          "id": "redacted-24",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 9,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-7",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:24:28.436Z"
+        }
+      ]
+    },
+    "doneFull": {
+      "status": 200,
+      "body": [
+        {
+          "id": "redacted-19",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 3,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-6",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:09:39.766Z"
+        },
+        {
+          "id": "redacted-20",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 2,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-5",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:55:12.137Z"
+        },
+        {
+          "id": "redacted-21",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 2,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-6",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:40:39.555Z"
+        },
+        {
+          "id": "redacted-22",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 7,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-7",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:40:34.136Z"
+        },
+        {
+          "id": "redacted-23",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 2,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-3",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:34:56.662Z"
+        },
+        {
+          "id": "redacted-24",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 9,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-7",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:24:28.436Z"
+        }
+      ]
+    },
+    "doneFirst": {
+      "status": 200,
+      "body": [
+        {
+          "id": "redacted-19",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 3,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-6",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:09:39.766Z"
+        }
+      ]
+    },
+    "doneSecond": {
+      "status": 200,
+      "body": [
+        {
+          "id": "redacted-20",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 2,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-5",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:55:12.137Z"
+        }
+      ]
+    },
+    "filtered": {
+      "status": 200,
+      "body": [
+        {
+          "id": "redacted-19",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 3,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-6",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:09:39.766Z"
+        },
+        {
+          "id": "redacted-20",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 2,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-5",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:55:12.137Z"
+        },
+        {
+          "id": "redacted-21",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 2,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-6",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:40:39.555Z"
+        },
+        {
+          "id": "redacted-22",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 7,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-7",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:40:34.136Z"
+        },
+        {
+          "id": "redacted-23",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 2,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-3",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:34:56.662Z"
+        },
+        {
+          "id": "redacted-24",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "done",
+          "statusVersion": 9,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-7",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T14:24:28.436Z"
+        }
+      ]
+    },
+    "empty": {
+      "status": 200,
+      "body": []
+    },
+    "assignee": {
+      "status": 200,
+      "body": [
+        {
+          "id": "redacted-12",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "blocked",
+          "statusVersion": 0,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-1",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:36.674Z"
+        },
+        {
+          "id": "redacted-15",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "in_progress",
+          "statusVersion": 1,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-1",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:36.478Z"
+        },
+        {
+          "id": "redacted-16",
+          "companyId": "redacted-2",
+          "projectId": "redacted-8",
+          "status": "blocked",
+          "statusVersion": 0,
+          "priority": "medium",
+          "assigneeAgentId": "redacted-1",
+          "assigneeUserId": null,
+          "updatedAt": "2026-09-28T15:23:36.387Z"
+        }
+      ]
+    },
+    "configurations": {
+      "status": 403,
+      "body": {
+        "error": "Missing permission: agents:suggest-changes.",
+        "details": {
+          "reason": "deny_missing_grant"
+        }
+      }
+    },
+    "boardKeys": {
+      "status": 401,
+      "body": {
+        "error": "Board authentication required"
+      }
+    },
+    "unauthorized": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized"
+      }
+    },
+    "activity": {
+      "status": 200,
+      "body": [
+        {
+          "id": "redacted-25",
+          "companyId": "redacted-2",
+          "actorType": "agent",
+          "entityType": "environment_lease",
+          "createdAt": "2026-09-28T15:23:43.265Z"
+        }
+      ]
+    }
+  }
+}
