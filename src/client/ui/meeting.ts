@@ -1,3 +1,4 @@
+import { openConnectedOffice, isConnectedOffice } from './connected';
 import { MEETING_PATTERNS, MEETING_PATTERN_IDS, TOKENS_PER_SEAT, meetingSpend, outputProblem, slugify } from '../../shared/meetings';
 import { fmtTokens, type Meeting, type MeetingPattern, type MeetingTurn } from '../../shared/protocol';
 import type { Net } from '../net';
@@ -35,6 +36,7 @@ const PART_LABEL: Record<MeetingTurn['state'], string> = { waiting: '⏳ up next
  * that calls one.
  */
 export function openMeeting(net: Net, actions: MeetingActions, preset?: MeetingPreset) {
+  if (isConnectedOffice()) return openConnectedOffice(net);
   const close = h('button.btn.close', { 'aria-label': 'Close' }, '✕');
   const title = h('h2', {}, '🤝 Meeting room');
   const body = h('div.body.meeting');

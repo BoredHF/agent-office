@@ -997,3 +997,9 @@ a.when:hover { text-decoration: underline; }
 .workflow-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .queue-list li.review { border-left: 4px solid #b88713; }
 .queue-list li.blocked { border-left: 4px solid #bb4850; }
+
+.connected-office { overflow-wrap: anywhere; min-width: 0; }
+.connected-office section { margin-block: 1rem; }
+.connected-card { border: 1px solid var(--border, #777); border-radius: 8px; padding: .75rem; margin-block: .5rem; }
+.connected-office .workflow-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.connected-office .btn { white-space: normal; max-width: 100%; }

@@ -1,3 +1,5 @@
+import { openConnectedSetup } from './connected-setup';
+import { openConnectedOffice, isConnectedOffice } from './connected';
 import type { OfficeRole, QueueTask, TaskPriority, TaskUpdate } from '../../shared/protocol';
 import type { Net } from '../net';
 import { store } from '../state';
@@ -75,6 +77,7 @@ function editRole(net: Net, role?: OfficeRole) {
 }
 
 export function openRoles(net: Net) {
+  if (isConnectedOffice()) return openConnectedOffice(net);
   const officeId = store.floor;
   const body = h('div.body');
   const close = h('button.btn', {}, 'Close');
@@ -102,6 +105,7 @@ export function openOffices(net: Net) {
   const render = () => body.replaceChildren(
     h('p', {}, 'Each office has its own agents, roles, tasks and activity. Local offices start with an empty workspace; add repository projects through the elevator.'),
     h('button.btn.primary', { onclick: () => openPrompt({ title: 'Create office', placeholder: 'Office name', onSubmit: (name) => net.send({ t: 'office.create', name }) }) }, 'Create office'),
+    h('button.btn', { onclick: () => openConnectedSetup(net) }, 'Connect Paperclip office'),
     ...store.floors.filter((f) => !f.cloning).map((f) => h('p.workflow-fields', {}, h('b', {}, f.name),
       h('button.btn', { disabled: !!f.archivedAt || f.id === store.floor, onclick: () => { net.send({ t: 'floor.go', floor: f.id }); modal.close(); } }, f.id === store.floor ? 'Current office' : 'Switch'),
       h('button.btn', { onclick: () => openPrompt({ title: 'Rename office', initial: f.name, onSubmit: (name) => net.send({ t: 'office.rename', officeId: f.id, name }) }) }, 'Rename'),
