@@ -49,6 +49,9 @@ export class Net {
     ws.onclose = async () => {
       if (this.ws !== ws) return;
       this.up = false;
+      if (store.orchestration?.scope.mode === 'paperclip') {
+        store.apply({ t: 'orchestration', snapshot: { ...store.orchestration, state: 'stale', error: 'Office connection lost. Reconnecting automatically; showing the last snapshot.' } });
+      }
       this.statusHandlers.forEach((h) => h(false));
       if (this.closedByUs) return;
       // Session expired? Go back to the door.
