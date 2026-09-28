@@ -1,3 +1,4 @@
+import { officeBinding, type OfficeBinding } from '../shared/orchestration.js';
 import { execFile, execFileSync } from 'node:child_process';
 import { accessSync, constants, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -9,6 +10,7 @@ import { atomicJson, backupLegacy } from './persistence.js';
 
 /** A floor as floors.json keeps it. */
 export interface FloorDef {
+  orchestration?: OfficeBinding;
   id: string;
   name: string;
   /** owner/name on GitHub. */
@@ -224,6 +226,7 @@ export class Building {
       if (!d || typeof d.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(d.id) || ids.has(d.id)
         || typeof d.dir !== 'string' || !path.isAbsolute(d.dir) || dirs.has(existsSync(d.dir) ? realpathSync(d.dir) : path.resolve(d.dir))
         || typeof d.name !== 'string') throw new Error('Invalid or overlapping office storage');
+      officeBinding(d.orchestration);
       ids.add(d.id);
       dirs.add(existsSync(d.dir) ? realpathSync(d.dir) : path.resolve(d.dir));
       this.defs.push(d);
