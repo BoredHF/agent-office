@@ -4,3 +4,8 @@ dist
 *.log
 .DS_Store
 pw.txt
+
+# Local deployment credentials
+.env
+.env.*
+!.env.example
