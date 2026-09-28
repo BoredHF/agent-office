@@ -22,7 +22,7 @@ function savePending(value: Readonly<SetupRequest> | undefined) {
 
 export function openConnectedSetup(net: Net): void {
   const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  let alive = true, busy = false, projects: SetupProject[] = [];
+  let alive = true, busy = false, catalogValid = false, projects: SetupProject[] = [];
   const name = h('input', { required: true, maxlength: 100, value: pending?.name ?? '', 'aria-label': 'Office name' });
   const connection = h('select', { 'aria-label': 'Connection' });
   const company = h('select', { 'aria-label': 'Company' });
@@ -43,7 +43,7 @@ export function openConnectedSetup(net: Net): void {
   const lock = () => {
     for (const field of [name, connection, company, project]) field.disabled = busy || !!pending;
     reload.disabled = busy;
-    submit.disabled = busy || (!pending && !project.value);
+    submit.disabled = busy || (!pending && (!catalogValid || !project.value));
     submit.textContent = pending ? 'Retry saved request' : 'Create connected office';
   };
   const projectsChanged = () => {
@@ -57,6 +57,10 @@ export function openConnectedSetup(net: Net): void {
   connection.onchange = companiesChanged;
   company.onchange = projectsChanged;
   const load = async () => {
+    // A cached tuple is not authorization for a new office after a failed reload.
+    catalogValid = false;
+    projects = [];
+    for (const select of [connection, company, project]) setOptions(select, []);
     busy = true; lock();
     try {
       const response = await fetch('/api/paperclip/catalog', { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(30000) });
@@ -64,6 +68,7 @@ export function openConnectedSetup(net: Net): void {
       const rows = parseCatalog(await response.json());
       if (!alive) return;
       projects = rows;
+      catalogValid = true;
       setOptions(connection, [...new Set(rows.map(p => p.connectionId))].map(id => [id, id]), pending?.connectionId);
       companiesChanged();
       status.textContent = pending ? 'A creation outcome is unresolved. Retry the saved request to reconcile; its name and scope are locked.' :
@@ -81,6 +86,7 @@ export function openConnectedSetup(net: Net): void {
     if (busy) return;
     try {
       if (!pending) {
+        if (!catalogValid) throw new Error('Reload the catalog before creating an office.');
         const selected = projects.find(p => p.connectionId === connection.value && p.companyId === company.value && p.projectId === project.value);
         if (!selected) throw new Error('Choose an authorized project.');
         savePending(setupRequest(selected, name.value, crypto.randomUUID()));
