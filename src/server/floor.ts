@@ -20,6 +20,8 @@ import { MeetingRoom } from './meetings.js';
 import { Worktrees } from './worktrees.js';
 import type { Ledger } from './usage.js';
 import type { Capacity } from './machine.js';
+import { createOrchestrationProvider, LocalOrchestrationProvider, type OrchestrationProvider } from './orchestration.js';
+import { officeBinding } from '../shared/orchestration.js';
 
 type ToastLevel = 'info' | 'warn' | 'error';
 
@@ -79,9 +81,15 @@ export class Floor {
   readonly id: string;
   readonly dir: string;
   readonly project: ProjectInfo;
-  readonly workers: WorkerManager;
+  readonly provider: OrchestrationProvider;
+  get local() { return this.provider instanceof LocalOrchestrationProvider ? this.provider.runtime : undefined; }
+  private requireLocal() {
+    if (!this.local) throw new Error('Local execution is unavailable in a connected office');
+    return this.local;
+  }
+  get workers(): WorkerManager { return this.requireLocal().workers; }
   readonly github: GitHub;
-  readonly queue: TaskQueue;
+  get queue(): TaskQueue { return this.requireLocal().queue; }
   readonly chat: ChatLog;
   readonly changes: Changes;
   readonly decor: Decor;
@@ -89,11 +97,11 @@ export class Floor {
   /** The whiteboard everyone on the floor draws on together. */
   readonly whiteboard: Whiteboard;
   /** The meeting room, where workers work through a question together (see meetings.ts). */
-  readonly meetings: MeetingRoom;
+  get meetings(): MeetingRoom { return this.requireLocal().meetings; }
   /** Settles once the workers whose terminals outlived the last office are picked back up, and the rest woken. */
   readonly ready: Promise<void>;
   readonly dog: Dog;
-  private timer: NodeJS.Timeout;
+  private timer?: NodeJS.Timeout;
   /** Pull requests merging, to ring the gong for. */
   private merges = new MergeWatch();
 
@@ -101,6 +109,7 @@ export class Floor {
     readonly def: FloorDef,
     private ctx: FloorContext,
   ) {
+    const binding = officeBinding(def.orchestration);
     this.id = def.id;
     this.dir = def.dir;
     const dataDir = path.join(def.dir, '.agent-office');
@@ -111,48 +120,17 @@ export class Floor {
 
     // Before the workers, so it hears about the ones who wake up needing input.
     this.dog = new Dog(def.id, dataDir, {
-      workers: () => this.workers?.list() ?? [],
+      workers: () => this.local?.workers.list() ?? [],
       people: () => ctx.peers(this),
       send: (dog) => ctx.emit(this, { t: 'dog', dog }),
     });
-
-    this.workers = new WorkerManager(
-      def.dir,
-      dataDir,
-      ctx.agentCmd,
-      ctx.agentArgs,
-      ctx.hook,
-      {
-        update: (worker) => {
-          ctx.emit(this, { t: 'worker.update', worker });
-          // Still being built: the first updates come from waking the workers already at their desks.
-          this.queue?.onWorker(worker);
-          this.meetings?.onWorker(worker);
-          this.dog.onWorker(worker);
-          ctx.workerChanged(this, worker);
-        },
-        remove: (workerId) => {
-          this.changes?.forget(workerId);
-          ctx.emit(this, { t: 'worker.remove', workerId });
-          this.queue?.onWorkerGone(workerId);
-          this.meetings?.onWorkerGone(workerId);
-          this.dog.onWorkerGone(workerId);
-          ctx.workerChanged(this, workerId);
-        },
-        data: (workerId, data, viewers) => ctx.termData(workerId, data, viewers),
-        screen: (workerId, frame) => ctx.emit(this, { t: 'screen', workerId, ...frame }, true),
-        toast: (text, level) => ctx.toast(this, text, level),
-      },
-      ctx.ledger,
-      ctx.capacity,
-    );
 
     this.github = new GitHub(
       def.dir,
       (state) => ctx.emit(this, { t: 'gh.issues', state }),
       (state) => {
         ctx.emit(this, { t: 'gh.pulls', state });
-        this.queue?.onPulls(state.items);
+        this.local?.queue.onPulls(state.items);
         if (state.loading || state.error) return;
         for (const p of this.merges.look(state.items)) {
           ctx.toast(this, `🎉 PR #${p.number} merged: ${p.title}`);
@@ -160,47 +138,82 @@ export class Floor {
         }
       },
     );
-    // The 📋 task queue seats workers by itself: it watches the workers and links PRs from GitHub.
-    this.queue = new TaskQueue(dataDir, this.workers, !!this.project.branch, {
-      update: (state) => ctx.emit(this, { t: 'queue', state }),
-      toast: (text, level) => ctx.toast(this, text, level),
-      claimIssue: (issue) => this.github.claim(issue),
-      refreshGitHub: () => void this.github.refresh(),
-      hiringPaused: () => ctx.ledger.hiringPaused,
-      room: () => ctx.capacity.room(),
-      emptied: () => {
-        ctx.toast(this, '📋 Every attempt finished; check the task board for review 🎉');
-        ctx.emit(this, { t: 'gong', why: 'queue' });
-      },
-    }, true);
+    this.provider = createOrchestrationProvider(def.id, binding, () => {
+      const workers = new WorkerManager(
+        def.dir,
+        dataDir,
+        ctx.agentCmd,
+        ctx.agentArgs,
+        ctx.hook,
+        {
+          update: (worker) => {
+            ctx.emit(this, { t: 'worker.update', worker });
+            // Still being built: the first updates come from waking the workers already at their desks.
+            this.local?.queue.onWorker(worker);
+            this.local?.meetings.onWorker(worker);
+            this.dog.onWorker(worker);
+            ctx.workerChanged(this, worker);
+          },
+          remove: (workerId) => {
+            this.changes?.forget(workerId);
+            ctx.emit(this, { t: 'worker.remove', workerId });
+            this.local?.queue.onWorkerGone(workerId);
+            this.local?.meetings.onWorkerGone(workerId);
+            this.dog.onWorkerGone(workerId);
+            ctx.workerChanged(this, workerId);
+          },
+          data: (workerId, data, viewers) => ctx.termData(workerId, data, viewers),
+          screen: (workerId, frame) => ctx.emit(this, { t: 'screen', workerId, ...frame }, true),
+          toast: (text, level) => ctx.toast(this, text, level),
+        },
+        ctx.ledger,
+        ctx.capacity,
+      );
 
-    // Meetings seat their own workers round the meeting room's table and run them round by round.
-    this.meetings = new MeetingRoom(
-      def.dir,
-      dataDir,
-      {
-        defaultProvider: this.workers.defaultProvider,
-        list: () => this.workers.list(),
-        seat: (deskId, by, prompt, provider, model, effort, meeting) => this.workers.spawn(deskId, by, prompt, false, 'agent', provider, model, effort, meeting),
-        prompt: (id, text, by) => this.workers.prompt(id, text, by),
-        write: (id, data, by) => this.workers.write(id, data, by),
-        kill: (id) => this.workers.kill(id),
-      },
-      this.project.branch ? new Worktrees(def.dir) : undefined,
-      {
-        update: (state) => ctx.emit(this, { t: 'meeting', state }),
+      // The 📋 task queue seats workers by itself: it watches the workers and links PRs from GitHub.
+      const queue = new TaskQueue(dataDir, workers, !!this.project.branch, {
+        update: (state) => ctx.emit(this, { t: 'queue', state }),
         toast: (text, level) => ctx.toast(this, text, level),
+        claimIssue: (issue) => this.github.claim(issue),
+        refreshGitHub: () => void this.github.refresh(),
         hiringPaused: () => ctx.ledger.hiringPaused,
-        postReview: (pr, file) => this.github.review(pr, file),
-      },
-    );
+        room: () => ctx.capacity.room(),
+        emptied: () => {
+          ctx.toast(this, '📋 Every attempt finished; check the task board for review 🎉');
+          ctx.emit(this, { t: 'gong', why: 'queue' });
+        },
+      }, true);
+
+      // Meetings seat their own workers round the meeting room's table and run them round by round.
+      const meetings = new MeetingRoom(
+        def.dir,
+        dataDir,
+        {
+          defaultProvider: workers.defaultProvider,
+          list: () => workers.list(),
+          seat: (deskId, by, prompt, provider, model, effort, meeting) => workers.spawn(deskId, by, prompt, false, 'agent', provider, model, effort, meeting),
+          prompt: (id, text, by) => workers.prompt(id, text, by),
+          write: (id, data, by) => workers.write(id, data, by),
+          kill: (id) => workers.kill(id),
+        },
+        this.project.branch ? new Worktrees(def.dir) : undefined,
+        {
+          update: (state) => ctx.emit(this, { t: 'meeting', state }),
+          toast: (text, level) => ctx.toast(this, text, level),
+          hiringPaused: () => ctx.ledger.hiringPaused,
+          postReview: (pr, file) => this.github.review(pr, file),
+        },
+      );
+
+      return { workers, queue, meetings };
+    });
 
     // What each worker changed, for the Changes window at its desk (see changes.ts).
     this.changes = new Changes(
       def.dir,
       this.project.branch,
       (workerId) => {
-        const w = this.workers.get(workerId);
+        const w = this.local?.workers.get(workerId);
         if (!w) return undefined;
         return { name: w.name, cwd: w.worktree ? path.join(def.dir, w.worktree.path) : def.dir, rel: w.worktree?.path ?? '', worktreeBase: w.worktree?.base };
       },
@@ -218,8 +231,9 @@ export class Floor {
     this.decor = new Decor(dataDir);
     this.jukebox = new Jukebox(dataDir);
     this.whiteboard = new Whiteboard(dataDir);
-    this.ready = this.workers.start(this.queue.state().tasks.flatMap((t) => t.workerId ? [t.workerId] : [])).then(() => { this.queue.start(); });
+    this.ready = this.provider instanceof LocalOrchestrationProvider ? this.provider.ready : Promise.resolve();
 
+    if (!this.local) return;
     void this.github.refresh();
     // A floor with people on it, or work under way, keeps its boards fresh; the others check in now and then.
     this.timer = setInterval(() => {
@@ -234,6 +248,7 @@ export class Floor {
 
   /** Someone just walked in: boards that haven't been looked at in a while get fetched again. */
   arrived() {
+    if (!this.local) return;
     if (Date.now() - Math.max(this.github.issues.fetchedAt, this.github.pulls.fetchedAt) > REFRESH_MS) void this.github.refresh();
   }
 
@@ -242,9 +257,10 @@ export class Floor {
   }
 
   info(): FloorInfo {
-    const ws = this.workers.list();
+    const ws = this.local?.workers.list() ?? [];
     return {
       id: this.id,
+      orchestration: this.provider.scope,
       name: this.def.name,
       repo: this.def.repo,
       dir: this.dir,
@@ -263,10 +279,9 @@ export class Floor {
     clearInterval(this.timer);
     this.dog.stop();
     this.github.stop();
-    this.queue.shutdown();
-    this.meetings.shutdown();
+
     this.changes.stop();
     this.whiteboard.flush();
-    this.workers.shutdown(keep);
+    this.provider.shutdown(keep);
   }
 }

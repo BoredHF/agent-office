@@ -1,3 +1,4 @@
+import { isLocalExecutionMessage } from '../shared/orchestration.js';
 import http from 'node:http';
 import https from 'node:https';
 import { randomBytes } from 'node:crypto';
@@ -220,7 +221,7 @@ export async function startServer(cfg: Config) {
   const floorOf = (c: Client): Floor | undefined => (c.peer.floor ? floors.get(c.peer.floor) : undefined);
   /** The floor a worker sits on. Worker ids are unique across the building. */
   const workerFloor = (workerId: string): Floor | undefined => {
-    for (const f of floors.values()) if (f.workers.get(workerId)) return f;
+    for (const f of floors.values()) if (f.local?.workers.get(workerId)) return f;
     return undefined;
   };
   /** To everyone on one floor. */
@@ -296,7 +297,7 @@ export async function startServer(cfg: Config) {
     const workerId = url.searchParams.get('worker') ?? '';
     const token = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
     const floor = workerFloor(workerId);
-    const agent = floor?.workers.authenticate(workerId, token);
+    const agent = floor?.local?.workers.authenticate(workerId, token);
     if (!floor || !agent) return send(res, 401, { error: 'Send your own AGENT_OFFICE_WORKER_ID as ?worker= and AGENT_OFFICE_HOOK_TOKEN as the bearer token' });
     if (!DESK_BY_ID.get(agent.deskId)?.station) return send(res, 403, { error: 'Only the agents standing by the boards can use the queue' });
     const view = () => {
@@ -367,7 +368,7 @@ export async function startServer(cfg: Config) {
   const limits = new PlanLimitsReader(
     configuredProvider(cfg.agentCmd) === 'claude' ? resolveCommand(cfg.agentCmd) : resolveCommand('claude'),
     childEnv(),
-    () => clients.size > 0,
+    () => [...clients.values()].some((c) => !!floorOf(c)?.local),
     (state) => broadcast({ t: 'limits', state }),
   );
 
@@ -385,7 +386,7 @@ export async function startServer(cfg: Config) {
     cfg.maxWorkers,
     () => {
       let n = 0;
-      for (const f of floors.values()) n += f.workers.list().length;
+      for (const f of floors.values()) n += (f.local?.workers.list().length ?? 0);
       return n;
     },
     (state) => broadcast({ t: 'machine', state }),
@@ -396,7 +397,7 @@ export async function startServer(cfg: Config) {
     if (machine.limit === undefined) return;
     // Not right now: whoever freed the seat (a queue making room for its next task) takes it first.
     setImmediate(() => {
-      for (const f of floors.values()) if (f !== except) f.queue.pump();
+      for (const f of floors.values()) if (f !== except) f.local?.queue.pump();
     });
   };
 
@@ -476,12 +477,12 @@ export async function startServer(cfg: Config) {
   // Web servers the workers start, for the Services board and service tunnels (see relay.ts).
   // One scan covers every floor; each floor's board lists its own workers' servers.
   const servicesState = (floor: Floor | undefined, items = services.list()): ServicesState => ({
-    items: floor ? items.filter((s) => floor.workers.get(s.workerId)) : [],
+    items: floor ? items.filter((s) => floor.local?.workers.get(s.workerId)) : [],
     port: cfg.port,
     ssh: team.ssh,
   });
   const services = new Services(
-    () => [...floors.values()].flatMap((f) => f.workers.owners()),
+    () => [...floors.values()].flatMap((f) => (f.local?.workers.owners() ?? [])),
     (items) => {
       for (const c of clients.values()) sendTo(c, { t: 'services', state: servicesState(floorOf(c), items) });
     },
@@ -515,24 +516,25 @@ export async function startServer(cfg: Config) {
   /** Everything on a floor, for whoever just arrived there. */
   const floorView = (floor: Floor | undefined): FloorView => ({
     floor: floor?.id ?? null,
+    orchestration: floor?.provider.snapshot(),
     project: floor?.project ?? null,
-    workers: floor?.workers.list() ?? [],
+    workers: floor?.local?.workers.list() ?? [],
     issues: floor?.github.issues ?? { items: [], fetchedAt: 0, loading: false },
     pulls: floor?.github.pulls ?? { items: [], fetchedAt: 0, loading: false },
     chat: floor?.chat.recent(50) ?? chat.recent(50),
-    queue: floor?.queue.state() ?? { tasks: [], maxWorkers: 0 },
+    queue: floor?.local?.queue.state() ?? { tasks: [], maxWorkers: 0 },
     decor: floor?.decor.list() ?? [],
     services: servicesState(floor),
     dog: floor?.dog.view() ?? null,
     jukebox: floor?.jukebox.state() ?? { on: false, track: JUKEBOX_TUNES[0].id, startedAt: Date.now(), elapsed: 0 },
     whiteboard: { elements: floor?.whiteboard.scene() ?? [], people: floor ? drawing(floor) : [] },
-    meeting: floor?.meetings.state() ?? { current: null, past: [] },
+    meeting: floor?.local?.meetings.state() ?? { current: null, past: [] },
     cabinet: { ...cabinetState(floor), frame: (floor && cabinetPlayer(floor)?.frame) ?? null },
   });
   /** The rooftop bar: nobody works up there, so it has none of a floor's things. */
   const roofView = (): FloorView => ({ ...floorView(undefined), floor: ROOF });
   const screensOf = (c: Client, floor: Floor | undefined) => {
-    for (const { workerId, frame } of floor?.workers.fullScreens() ?? []) sendTo(c, { t: 'screen', workerId, ...frame, full: true });
+    for (const { workerId, frame } of floor?.local?.workers.fullScreens() ?? []) sendTo(c, { t: 'screen', workerId, ...frame, full: true });
   };
   /** Where someone arriving goes: the floor they asked for, else the first one there is. */
   const arrivalFloor = (wanted: string | null): Floor | undefined => (wanted && floors.get(wanted)) || floors.values().next().value;
@@ -632,7 +634,7 @@ export async function startServer(cfg: Config) {
     const needle = searchKey(q);
     if (needle.length < SEARCH_MIN) return { q, chat: [], terminals: [], more: false };
     const said = (floor?.chat ?? chat).search(needle, SEARCH_CHAT_HITS);
-    const shown = floor?.workers.search(needle, SEARCH_TERMINAL_HITS) ?? { hits: [], more: false };
+    const shown = floor?.local?.workers.search(needle, SEARCH_TERMINAL_HITS) ?? { hits: [], more: false };
     return { q, chat: said.hits, terminals: shown.hits, more: said.more || shown.more };
   };
 
@@ -696,6 +698,8 @@ export async function startServer(cfg: Config) {
       }
       if (p === '/api/whoami') return send(res, 200, { ok: true, me: meOf(session.account?.id) });
       if (p === '/api/agents/opencode/models' && req.method === 'GET') {
+        const requested = url.searchParams.get('floor');
+        if (requested ? !floors.get(requested)?.local : ![...floors.values()].some((f) => !!f.local)) return send(res, 403, { error: 'Local model discovery requires a local office' });
         try {
           return send(res, 200, { models: await openCodeModels.get() });
         } catch {
@@ -720,6 +724,7 @@ export async function startServer(cfg: Config) {
       }
       // Which floor a request is about: its boards and its workers.
       const floor = floors.get(url.searchParams.get('floor') ?? '');
+      if (floor && !floor.local && (p.startsWith('/api/gh/') || p.startsWith('/api/changes/'))) return send(res, 403, { error: 'Local execution is unavailable in a connected office' });
       if (p === '/api/whiteboard/file') {
         // Pictures on the whiteboard. Their ids are hashes of what's in them, so they never change.
         if (!floor) return send(res, 404, { error: 'No such floor' });
@@ -748,7 +753,7 @@ export async function startServer(cfg: Config) {
         const side = url.searchParams.get('side');
         if (!workerId || !file || (side !== 'old' && side !== 'new')) return send(res, 400, { error: 'Bad request' });
         if (!floor) return send(res, 404, { error: 'No such floor' });
-        if (!floor.workers.get(workerId)) return send(res, 404, { error: 'No such worker' });
+        if (!floor.local?.workers.get(workerId)) return send(res, 404, { error: 'No such worker' });
         const r = await floor.changes.file(workerId, file, side);
         if ('error' in r) return send(res, r.status, { error: r.error });
         res.writeHead(200, {
@@ -930,7 +935,7 @@ export async function startServer(cfg: Config) {
     if (floor) {
       floor.arrived();
       // Anyone whose process ended since (exited, or failed to resume) gets up as you walk in.
-      floor.workers.wakeAll();
+      floor.local?.workers.wakeAll();
     }
     limits.refresh();
 
@@ -949,7 +954,7 @@ export async function startServer(cfg: Config) {
       if (client.whiteboard) drawingChanged(floorOf(client));
       stopPlaying(client);
       for (const f of floors.values()) {
-        f.workers.detachAll(id);
+        f.local?.workers.detachAll(id);
         f.changes.unwatchAll(id);
       }
       broadcast({ t: 'peer.leave', id });
@@ -986,7 +991,7 @@ export async function startServer(cfg: Config) {
     screensOf(c, floor);
     arrived(c, left);
     floor.arrived();
-    floor.workers.wakeAll();
+    floor.local?.workers.wakeAll();
     floorsChanged();
   };
 
@@ -1004,7 +1009,7 @@ export async function startServer(cfg: Config) {
   const leave = (c: Client, at?: { x: number; y: number; z: number; rotY: number }) => {
     const was = floorOf(c);
     if (was) {
-      was.workers.detachAll(c.id);
+      was.local?.workers.detachAll(c.id);
       was.changes.unwatchAll(c.id);
     }
     c.attached.clear();
@@ -1045,6 +1050,11 @@ export async function startServer(cfg: Config) {
       warn(c, 'Office context changed or client is outdated; reload before trying again');
       return;
     }
+    const current = floorOf(c);
+    if (current && !current.local && isLocalExecutionMessage(msg.t)) {
+      warn(c, 'Local execution is unavailable in a connected office; use Paperclip capabilities');
+      return;
+    }
     /** The floor `c` is on, or a note to them that they have to be on one. */
     const here = (): Floor | undefined => {
       const f = floorOf(c);
@@ -1055,7 +1065,7 @@ export async function startServer(cfg: Config) {
     const worker = (id: unknown) => {
       const wid = str(id, 32);
       const floor = floorOf(c);
-      const info = floor?.workers.get(wid);
+      const info = floor?.local?.workers.get(wid);
       if (!floor || !info) { warn(c, 'No such worker in this office'); return undefined; }
       return { wid, floor, info };
     };
@@ -1201,9 +1211,9 @@ export async function startServer(cfg: Config) {
         const id = str(msg.officeId, 64);
         const floor = floors.get(id);
         if (msg.archived && floor) {
-          if (floor.workers.list().some((w) => !['done', 'exited', 'offline'].includes(w.status))
-            || floor.queue.state().tasks.some((t) => ['queued', 'running'].includes(t.status))
-            || floor.queue.state().error) { warn(c, 'Finish or block queued work and stop active agents before archiving'); break; }
+          if (floor.local?.workers.list().some((w) => !['done', 'exited', 'offline'].includes(w.status))
+            || floor.local?.queue.state().tasks.some((t) => ['queued', 'running'].includes(t.status))
+            || floor.local?.queue.state().error) { warn(c, 'Finish or block queued work and stop active agents before archiving'); break; }
           building.archive(id, true);
           for (const peer of clients.values()) if (peer.peer.floor === id) goToRoof(peer);
           floor.shutdown();
@@ -1555,7 +1565,7 @@ export async function startServer(cfg: Config) {
         const workerId = str(msg.workerId, 32);
         const file = str(msg.path, 4096);
         const floor = floorOf(c);
-        if (!floor?.workers.get(workerId)) {
+        if (!floor?.local?.workers.get(workerId)) {
           sendTo(c, { t: 'changes.diff', workerId, path: file, diff: '', truncated: false, error: 'No such worker' });
           break;
         }

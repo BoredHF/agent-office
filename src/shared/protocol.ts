@@ -1,3 +1,4 @@
+import type { OfficeBinding, ProviderSnapshot } from './orchestration.js';
 // Wire protocol between browser and server. Every WebSocket frame is one JSON object.
 
 import type { Look } from './avatar.js';
@@ -620,6 +621,7 @@ export interface ProjectInfo {
  * and queue. You go between them in the elevator.
  */
 export interface FloorInfo {
+  orchestration?: OfficeBinding;
   id: string;
   /** The repository's name, or the folder's when it isn't on GitHub. */
   name: string;
@@ -667,6 +669,7 @@ export interface RepoChoice {
 
 /** Everything that belongs to the floor you're on: sent when you walk in, and when you change floors. */
 export interface FloorView {
+  orchestration?: ProviderSnapshot;
   chat?: ChatLine[];
   /** The floor you're on; null while the building has none. */
   floor: string | null;
@@ -1086,6 +1089,7 @@ export type ClientMsg = { officeId?: string | null } & (
   | { t: 'ping'; at: number });
 
 export type ServerMsg =
+  | { t: 'orchestration'; snapshot: ProviderSnapshot }
   | ({
       t: 'welcome';
       you: string;
