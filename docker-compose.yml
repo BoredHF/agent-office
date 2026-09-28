@@ -1,0 +1,30 @@
+services:
+  agent-office:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      PORT: "4600"
+      AGENT_OFFICE_HOME: /home/node/agent-office
+      AGENT_OFFICE_PROJECTS: /home/node/projects
+      AGENT_OFFICE_PASSWORD: ${AGENT_OFFICE_PASSWORD:?Set AGENT_OFFICE_PASSWORD in Dokploy Environment}
+      AGENT_OFFICE_AGENT: ${AGENT_OFFICE_AGENT:-claude}
+      AGENT_OFFICE_MAX_WORKERS: ${AGENT_OFFICE_MAX_WORKERS:-3}
+      AGENT_OFFICE_BUDGET: ${AGENT_OFFICE_BUDGET:-}
+      AGENT_OFFICE_BUDGET_PAUSE: ${AGENT_OFFICE_BUDGET_PAUSE:-0}
+      AGENT_OFFICE_CITY: ${AGENT_OFFICE_CITY:-}
+      AGENT_OFFICE_SELF_UPDATE: "0"
+      GH_TOKEN: ${GH_TOKEN:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      GIT_USER_NAME: ${GIT_USER_NAME:-}
+      GIT_USER_EMAIL: ${GIT_USER_EMAIL:-}
+    expose:
+      - "4600"
+    volumes:
+      - agent-office-home:/home/node
+
+volumes:
+  agent-office-home:

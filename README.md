@@ -62,6 +62,10 @@ agent-office
 - **Screen sharing.** Your screen appears on the lounge TV for everyone, and there's a full-screen viewer.
 - **An account for everyone.** Open **🔑 Accounts** from the **☰** menu and make an invite link. Whoever opens it picks a password and gets an account in their own name. That name is the one on their character, in chat and on every terminal they type into (**⌨️** in the terminal header shows who typed last), and nobody else can take it. Admins see everyone's accounts there, can make someone an admin, and can revoke an account, which signs that person out at once. The shared office password keeps working alongside the accounts until an admin switches it off. Sessions are signed cookies, and login attempts are rate limited.
 
+## Deploy with Dokploy
+
+This fork includes a Dockerfile, persistent Docker Compose service, and container checks. Follow the [Dokploy deployment guide](deploy/DOKPLOY.md) to configure credentials, storage and an HTTPS domain.
+
 ## Requirements
 
 On the machine that runs the office (your laptop or a VPS):

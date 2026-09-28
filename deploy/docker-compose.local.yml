@@ -1,0 +1,5 @@
+# Optional local preview only. Do not select this override in Dokploy.
+services:
+  agent-office:
+    ports:
+      - "127.0.0.1:4600:4600"
