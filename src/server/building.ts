@@ -1,10 +1,11 @@
 import { execFile, execFileSync } from 'node:child_process';
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { FLOOR_PALETTES, MAX_FLOORS, normalizeRepo, sameRepo } from '../shared/floors.js';
 import type { ProjectsDirState, RepoChoice } from '../shared/protocol.js';
 import { gh } from './github.js';
+import { atomicJson, backupLegacy } from './persistence.js';
 
 /** A floor as floors.json keeps it. */
 export interface FloorDef {
@@ -16,6 +17,7 @@ export interface FloorDef {
   palette: number;
   addedBy: string;
   addedAt: number;
+  archivedAt?: number;
 }
 
 /** A projects folder picked in ⚙️ Settings (or with --projects), as projects-folder.json keeps it. */
@@ -91,6 +93,36 @@ export class Building {
     return undefined;
   }
 
+  create(name: string, by: string): FloorDef {
+    if (!name.trim()) throw new Error('Give the office a name');
+    if (this.defs.length >= MAX_FLOORS) throw new Error('The building is full');
+    const def = this.newDef(name.trim().slice(0, 100), undefined, '', by);
+    // Independent local offices do not share a checkout or mutable storage root.
+    def.dir = path.join(this.dataDir, 'offices', def.id);
+    mkdirSync(def.dir, { recursive: true, mode: 0o700 });
+    // Establish a git boundary even when the building lives inside an existing checkout.
+    execFileSync('git', ['init', '--quiet', def.dir], { stdio: ['ignore', 'pipe', 'pipe'] });
+    this.defs.push(def);
+    try { this.save(); } catch (err) { this.defs.pop(); throw err; }
+    return def;
+  }
+
+  rename(id: string, name: string) {
+    const def = this.defs.find((d) => d.id === id);
+    if (!def || !name.trim()) throw new Error('Give an existing office a name');
+    const old = def.name;
+    def.name = name.trim().slice(0, 100);
+    try { this.save(); } catch (err) { def.name = old; throw err; }
+  }
+
+  archive(id: string, archived: boolean) {
+    const def = this.defs.find((d) => d.id === id);
+    if (!def) throw new Error('No such office');
+    const old = def.archivedAt;
+    def.archivedAt = archived ? Date.now() : undefined;
+    try { this.save(); } catch (err) { def.archivedAt = old; throw err; }
+  }
+
   list(): FloorDef[] {
     return this.defs;
   }
@@ -111,7 +143,7 @@ export class Building {
     // Named after its folder, as the office always called it.
     const def = this.newDef(path.basename(abs), originRepo(abs), abs, by);
     this.defs.unshift(def);
-    this.save();
+    try { this.save(); } catch (err) { this.defs.shift(); throw err; }
     return def;
   }
 
@@ -150,7 +182,7 @@ export class Building {
       this.cloning.delete(key);
     }
     this.defs.push(def);
-    this.save();
+    try { this.save(); } catch (err) { this.defs.pop(); throw err; }
     return def;
   }
 
@@ -181,25 +213,22 @@ export class Building {
 
   private load() {
     if (!existsSync(this.file)) return;
-    try {
-      const saved = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<FloorDef>[];
-      const ids = new Set<string>();
-      for (const s of Array.isArray(saved) ? saved : []) {
-        if (typeof s.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(s.id) || ids.has(s.id) || typeof s.dir !== 'string' || !path.isAbsolute(s.dir)) continue;
-        ids.add(s.id);
-        this.defs.push({
-          id: s.id,
-          name: typeof s.name === 'string' && s.name ? s.name.slice(0, 100) : path.basename(s.dir),
-          repo: normalizeRepo(s.repo),
-          dir: s.dir,
-          palette: Number.isInteger(s.palette) && (s.palette as number) >= 0 ? (s.palette as number) : 0,
-          addedBy: typeof s.addedBy === 'string' ? s.addedBy : '?',
-          addedAt: typeof s.addedAt === 'number' ? s.addedAt : Date.now(),
-        });
-      }
-    } catch (err) {
-      console.error(`agent-office: ${this.file} couldn't be read, so the building starts empty: ${(err as Error).message}`);
+    const raw = JSON.parse(readFileSync(this.file, 'utf8'));
+    const legacy = Array.isArray(raw);
+    if (!legacy && raw.version !== 1) throw new Error('Unsupported office store version');
+    const saved = legacy ? raw : raw.offices;
+    if (!Array.isArray(saved)) throw new Error('Invalid office store');
+    const ids = new Set<string>();
+    const dirs = new Set<string>();
+    for (const d of saved) {
+      if (!d || typeof d.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(d.id) || ids.has(d.id)
+        || typeof d.dir !== 'string' || !path.isAbsolute(d.dir) || dirs.has(existsSync(d.dir) ? realpathSync(d.dir) : path.resolve(d.dir))
+        || typeof d.name !== 'string') throw new Error('Invalid or overlapping office storage');
+      ids.add(d.id);
+      dirs.add(existsSync(d.dir) ? realpathSync(d.dir) : path.resolve(d.dir));
+      this.defs.push(d);
     }
+    if (legacy) { backupLegacy(this.file); this.save(); }
   }
 
   private loadPicked() {
@@ -214,11 +243,7 @@ export class Building {
   }
 
   private save() {
-    try {
-      writeFileSync(this.file, JSON.stringify(this.defs, null, 2), { mode: 0o600 });
-    } catch (err) {
-      console.error(`agent-office: couldn't save the floors: ${(err as Error).message}`);
-    }
+    atomicJson(this.file, { version: 1, offices: this.defs });
   }
 }
 

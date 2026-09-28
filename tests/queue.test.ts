@@ -200,13 +200,13 @@ test('an office at its worker limit holds the queue, and a finished queue worker
   assert.equal(f.workers.length, 1);
   // The first finishes: its worker goes home to make room, and the second task gets the seat.
   f.workers[0].status = 'done'; q.onWorker(f.workers[0]);
-  assert.deepEqual(q.state().tasks.map((t) => t.status), ['done', 'running']);
+  assert.deepEqual(q.state().tasks.map((t) => t.status), ['review', 'running']);
   assert.deepEqual(f.workers.map((w) => w.id), ['worker-1']);
   // The limit lowered past who's there: nobody is sent home and nothing fails, the queue just waits.
   q.add('Third', 'Tester');
   limit = 0;
   f.workers[0].status = 'done'; q.onWorker(f.workers[0]);
-  assert.deepEqual(q.state().tasks.map((t) => [t.status, t.outcome]), [['done', 'done'], ['done', 'done'], ['queued', undefined]]);
+  assert.deepEqual(q.state().tasks.map((t) => [t.status, t.outcome]), [['review', 'done'], ['review', 'done'], ['queued', undefined]]);
   assert.equal(f.workers.length, 1);
   // Room again: it carries on.
   limit = 2; q.pump();

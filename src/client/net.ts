@@ -71,6 +71,6 @@ export class Net {
   }
 
   send(msg: ClientMsg) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ officeId: store.floor, ...msg }));
   }
 }
