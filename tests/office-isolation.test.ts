@@ -40,10 +40,19 @@ test('HTTP/WebSocket offices isolate tasks, chat and worker commands; archive is
       }
       throw new Error('No matching server message: ' + JSON.stringify(messages.map((x) => x.t)));
     };
-    await next((m) => m.t === 'welcome');
-    return { socket, next, messages, send: (msg: ClientMsg) => socket.send(JSON.stringify(msg)) };
+    const welcome = await next((m) => m.t === 'welcome');
+    if (welcome.t !== 'welcome') throw new Error('Expected welcome');
+    return { socket, next, messages, welcome, send: (msg: ClientMsg) => socket.send(JSON.stringify(msg)) };
   }
   const a = await connect();
+  assert.equal(a.welcome.floor, null);
+  a.send({ t: 'chat', text: 'Missing context must be rejected' });
+  await a.next((m) => m.t === 'toast' && /context changed/.test(m.text));
+  a.send({ t: 'chat', officeId: a.welcome.floor, text: 'Container lobby marker' });
+  await a.next((m) => m.t === 'chat' && m.text === 'Container lobby marker');
+  const lobbyReader = await connect();
+  assert.ok(lobbyReader.welcome.chat.some((m) => m.text === 'Container lobby marker'));
+  assert.ok(!lobbyReader.welcome.chat.some((m) => m.text === 'Missing context must be rejected'));
   a.send({ t: 'office.create', name: 'A' });
   const enteredA = await a.next((m) => m.t === 'floor.enter');
   assert.equal(enteredA.t, 'floor.enter'); if (enteredA.t !== 'floor.enter') return;
